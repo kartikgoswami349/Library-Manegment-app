@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Library",
+    "slug": "library-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/library-logo.png",
+    "scheme": "libraryapp",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.ssda.libraryapp",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/library-logo.png",
+        "backgroundColor": "#FFF7FA"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/library-logo.png",
+          "imageWidth": 170,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFF7FA"
+        }
+      ],
+      "expo-sqlite",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "948aef71-da40-4f18-ac27-1610f6db0623"
+      }
+    }
+  }
+}
