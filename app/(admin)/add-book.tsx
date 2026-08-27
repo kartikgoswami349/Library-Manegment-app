@@ -65,55 +65,156 @@ export default function AddBookScreen() {
     useState(false);
 
 
-  async function selectCover() {
+  function selectCover() {
 
-    try {
+  Alert.alert(
+    'Add Book Cover',
+    'Choose how you want to add the cover.',
+    [
+      {
+        text: 'Take Photo',
+        onPress: takeCoverPhoto,
+      },
 
-      const permission =
-        await ImagePicker
-          .requestMediaLibraryPermissionsAsync();
+      {
+        text: 'Choose from Gallery',
+        onPress: chooseCoverFromGallery,
+      },
 
-      if (!permission.granted) {
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+    ]
+  );
 
-        Alert.alert(
-          'Permission Required',
-          'Please allow access to your photos to select a book cover.'
-        );
-
-        return;
-      }
+}
 
 
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
+
+async function takeCoverPhoto() {
+
+  try {
+
+    const permission =
+      await ImagePicker
+        .requestCameraPermissionsAsync();
+
+
+    if (!permission.granted) {
+
+      Alert.alert(
+        'Camera Permission Required',
+        'Please allow camera access to take a book cover photo.'
+      );
+
+      return;
+    }
+
+
+    const result =
+      await ImagePicker
+        .launchCameraAsync({
+
           mediaTypes: ['images'],
+
           allowsEditing: true,
+
           aspect: [2, 3],
+
           quality: 0.8,
+
         });
 
 
-      if (!result.canceled) {
-        setCoverUri(
-          result.assets[0].uri
-        );
-      }
+    if (!result.canceled) {
 
-    } catch (error) {
-
-      console.log(
-        'Image picker error:',
-        error
-      );
-
-      Alert.alert(
-        'Error',
-        'Unable to select the image.'
+      setCoverUri(
+        result.assets[0].uri
       );
 
     }
 
+
+  } catch (error) {
+
+    console.log(
+      'Camera error:',
+      error
+    );
+
+
+    Alert.alert(
+      'Camera Error',
+      'Unable to open the camera.'
+    );
+
   }
+
+}
+
+
+
+async function chooseCoverFromGallery() {
+
+  try {
+
+    const permission =
+      await ImagePicker
+        .requestMediaLibraryPermissionsAsync();
+
+
+    if (!permission.granted) {
+
+      Alert.alert(
+        'Photos Permission Required',
+        'Please allow access to your photos to select a book cover.'
+      );
+
+      return;
+    }
+
+
+    const result =
+      await ImagePicker
+        .launchImageLibraryAsync({
+
+          mediaTypes: ['images'],
+
+          allowsEditing: true,
+
+          aspect: [2, 3],
+
+          quality: 0.8,
+
+        });
+
+
+    if (!result.canceled) {
+
+      setCoverUri(
+        result.assets[0].uri
+      );
+
+    }
+
+
+  } catch (error) {
+
+    console.log(
+      'Gallery error:',
+      error
+    );
+
+
+    Alert.alert(
+      'Gallery Error',
+      'Unable to open your photos.'
+    );
+
+  }
+
+}
 
 
   function removeCover() {

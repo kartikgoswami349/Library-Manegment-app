@@ -23,13 +23,13 @@ import { supabase } from '../lib/supabase';
 export default function SplashScreen() {
 
   const logoOpacity =
-    useRef(new Animated.Value(0)).current;
+  useRef(new Animated.Value(0.08)).current;
 
   const logoScale =
     useRef(new Animated.Value(0.9)).current;
 
   const textOpacity =
-    useRef(new Animated.Value(0)).current;
+  useRef(new Animated.Value(0.08)).current;
 
   const textTranslateY =
     useRef(new Animated.Value(12)).current;
@@ -47,72 +47,57 @@ export default function SplashScreen() {
 
   function startAnimation() {
 
-    Animated.sequence([
+  Animated.parallel([
 
-      Animated.parallel([
+    Animated.timing(
+      logoOpacity,
+      {
+        toValue: 1,
+        duration: 1600,
+        easing:
+          Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }
+    ),
 
-        Animated.timing(
-          logoOpacity,
-          {
-            toValue: 1,
-            duration: 1200,
+    Animated.timing(
+      logoScale,
+      {
+        toValue: 1,
+        duration: 1600,
+        easing:
+          Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }
+    ),
 
-            easing:
-              Easing.out(Easing.ease),
+    Animated.timing(
+      textOpacity,
+      {
+        toValue: 1,
+        duration: 1900,
+        delay: 350,
+        easing:
+          Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }
+    ),
 
-            useNativeDriver: true,
-          }
-        ),
+    Animated.timing(
+      textTranslateY,
+      {
+        toValue: 0,
+        duration: 1500,
+        delay: 350,
+        easing:
+          Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }
+    ),
 
-        Animated.timing(
-          logoScale,
-          {
-            toValue: 1,
-            duration: 1200,
+  ]).start();
 
-            easing:
-              Easing.out(Easing.ease),
-
-            useNativeDriver: true,
-          }
-        ),
-
-      ]),
-
-
-      Animated.parallel([
-
-        Animated.timing(
-          textOpacity,
-          {
-            toValue: 1,
-            duration: 1000,
-
-            easing:
-              Easing.out(Easing.ease),
-
-            useNativeDriver: true,
-          }
-        ),
-
-        Animated.timing(
-          textTranslateY,
-          {
-            toValue: 0,
-            duration: 1000,
-
-            easing:
-              Easing.out(Easing.ease),
-
-            useNativeDriver: true,
-          }
-        ),
-
-      ]),
-
-    ]).start();
-
-  }
+}
 
 
 async function checkSession() {
@@ -378,59 +363,57 @@ async function checkSession() {
   }
 }
 
-    <View style={styles.container}>
+    return (
+
+  <View style={styles.container}>
+
+    <Animated.Image
+      source={require(
+        '../assets/images/library-logo.png'
+      )}
+      resizeMode="contain"
+      style={[
+        styles.logo,
+        {
+          opacity: logoOpacity,
+
+          transform: [
+            {
+              scale: logoScale,
+            },
+          ],
+        },
+      ]}
+    />
 
 
-      <Animated.Image
-        source={require(
-          '../assets/images/library-logo.png'
-        )}
-        resizeMode="contain"
+    <Animated.Text
+      style={[
+        styles.tagline,
+        {
+          opacity: textOpacity,
 
-        style={[
-          styles.logo,
+          transform: [
+            {
+              translateY:
+                textTranslateY,
+            },
+          ],
+        },
+      ]}
+    >
 
-          {
-            opacity:
-              logoOpacity,
+      ज्ञान • भक्ति • अध्यात्म
 
-            transform: [
-              {
-                scale:
-                  logoScale,
-              },
-            ],
-          },
-        ]}
-      />
+    </Animated.Text>
 
+  </View>
 
-      <Animated.Text
-        style={[
-          styles.tagline,
+);
 
-          {
-            opacity:
-              textOpacity,
-
-            transform: [
-              {
-                translateY:
-                  textTranslateY,
-              },
-            ],
-          },
-        ]}
-      >
-
-        ज्ञान • भक्ति • अध्यात्म
-
-      </Animated.Text>
-
-
-    </View>
 
 }
+
 
 
 

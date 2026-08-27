@@ -11,11 +11,12 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.ssda.libraryapp",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/library-logo.png",
-        "backgroundColor": "#FFF7FA"
-      },
+  "package": "com.ssda.libraryapp",
+
+  "adaptiveIcon": {
+    "foregroundImage": "./assets/images/android-icon-foreground.png",
+    "backgroundColor": "#FFF7FA"
+  },
       "predictiveBackGestureEnabled": false
     },
     "web": {
