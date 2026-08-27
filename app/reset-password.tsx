@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import {
     useEffect,
+    useRef,
     useState,
 } from 'react';
 
@@ -18,11 +19,15 @@ import {
     View,
 } from 'react-native';
 
+
 import { Colors } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 
 
 export default function ResetPasswordScreen() {
+
+  const recoveryHandled =
+  useRef(false);
 
   const [newPassword, setNewPassword] =
     useState('');
@@ -45,58 +50,85 @@ export default function ResetPasswordScreen() {
 
   useEffect(() => {
 
-    prepareRecovery();
-
-  }, []);
+  let mounted = true;
 
 
+  async function handleRecoveryUrl(
+    url: string | null
+  ) {
 
-  async function prepareRecovery() {
+    if (
+      !url ||
+      recoveryHandled.current
+    ) {
+      return;
+    }
 
-  try {
 
-    const url =
-      await Linking.getInitialURL();
+    console.log(
+      'Recovery URL:',
+      url
+    );
 
 
-    if (url) {
+    try {
 
       /*
-        Password recovery links commonly return:
+        Support both Supabase recovery formats:
 
         #access_token=...
-        &refresh_token=...
-        &type=recovery
+        #refresh_token=...
+
+        OR
+
+        ?code=...
       */
 
-      const hashPart =
+      const hash =
         url.includes('#')
           ? url.split('#')[1]
           : '';
 
-      const queryPart =
+      const query =
         url.includes('?')
-          ? url.split('?')[1]
-              ?.split('#')[0]
+          ? url
+              .split('?')[1]
+              ?.split('#')[0] ?? ''
           : '';
 
 
-      const params =
-        new URLSearchParams(
-          hashPart || queryPart
-        );
+      const hashParams =
+        new URLSearchParams(hash);
+
+      const queryParams =
+        new URLSearchParams(query);
 
 
       const accessToken =
-        params.get(
+        hashParams.get(
+          'access_token'
+        ) ??
+        queryParams.get(
           'access_token'
         );
 
+
       const refreshToken =
-        params.get(
+        hashParams.get(
+          'refresh_token'
+        ) ??
+        queryParams.get(
           'refresh_token'
         );
 
+
+      const code =
+        queryParams.get('code');
+
+
+      /*
+        IMPLICIT TOKEN FLOW
+      */
 
       if (
         accessToken &&
@@ -118,61 +150,202 @@ export default function ResetPasswordScreen() {
           throw error;
         }
 
+
+        recoveryHandled.current =
+          true;
+
+
+        if (mounted) {
+          setReady(true);
+        }
+
+        return;
       }
 
-    }
+
+      /*
+        PKCE CODE FLOW
+      */
+
+      if (code) {
+
+        const { error } =
+          await supabase.auth
+            .exchangeCodeForSession(
+              code
+            );
 
 
-    const {
-      data: {
-        session,
-      },
-    } =
-      await supabase.auth
-        .getSession();
+        if (error) {
+          throw error;
+        }
 
 
-    if (!session) {
+        recoveryHandled.current =
+          true;
 
-      Alert.alert(
-        'Invalid Reset Link',
-        'Please request a new password reset link.',
-        [
-          {
-            text: 'OK',
 
-            onPress: () =>
-              router.replace(
-                '/(auth)/forgot-password'
-              ),
-          },
-        ]
+        if (mounted) {
+          setReady(true);
+        }
+
+        return;
+      }
+
+
+    } catch (error) {
+
+      console.log(
+        'Recovery URL error:',
+        error
       );
 
-      return;
     }
-
-
-    setReady(true);
-
-
-  } catch (error: any) {
-
-    console.log(
-      'Password recovery error:',
-      error
-    );
-
-
-    Alert.alert(
-      'Reset Link Error',
-      error?.message ??
-        'Unable to verify the password reset link.'
-    );
 
   }
 
-}
+
+
+  /*
+    1. Handle COLD START:
+       app was completely closed
+  */
+
+  Linking
+    .getInitialURL()
+    .then(handleRecoveryUrl);
+
+
+
+  /*
+    2. Handle WARM START:
+       app was already open/backgrounded
+  */
+
+  const linkSubscription =
+    Linking.addEventListener(
+      'url',
+      (event) => {
+
+        handleRecoveryUrl(
+          event.url
+        );
+
+      }
+    );
+
+
+
+  /*
+    3. Supabase may also emit
+       PASSWORD_RECOVERY.
+  */
+
+  const {
+    data: {
+      subscription:
+        authSubscription,
+    },
+  } =
+    supabase.auth
+      .onAuthStateChange(
+        (event, session) => {
+
+          if (
+            event ===
+              'PASSWORD_RECOVERY' &&
+            session
+          ) {
+
+            recoveryHandled.current =
+              true;
+
+            if (mounted) {
+              setReady(true);
+            }
+
+          }
+
+        }
+      );
+
+
+
+  /*
+    Give Android/deep linking a little
+    time before declaring the link invalid.
+  */
+
+  const timer =
+    setTimeout(
+      async () => {
+
+        if (
+          recoveryHandled.current
+        ) {
+          return;
+        }
+
+
+        const {
+          data: {
+            session,
+          },
+        } =
+          await supabase.auth
+            .getSession();
+
+
+        if (session) {
+
+          recoveryHandled.current =
+            true;
+
+          if (mounted) {
+            setReady(true);
+          }
+
+          return;
+        }
+
+
+        if (mounted) {
+
+          Alert.alert(
+            'Invalid Reset Link',
+            'Please request a new password reset link.',
+            [
+              {
+                text: 'OK',
+
+                onPress: () =>
+                  router.replace(
+                    '/(auth)/forgot-password'
+                  ),
+              },
+            ]
+          );
+
+        }
+
+      },
+      3000
+    );
+
+
+  return () => {
+
+    mounted = false;
+
+    clearTimeout(timer);
+
+    linkSubscription.remove();
+
+    authSubscription.unsubscribe();
+
+  };
+
+}, []);
 
 
 
@@ -226,16 +399,15 @@ export default function ResetPasswordScreen() {
 
 
       const { error } =
-        await supabase.auth
-          .updateUser({
-            password:
-              newPassword,
-          });
+      await supabase.auth.updateUser({
+    password: newPassword,
+  });
 
+if (error) {
+  throw error;
+}
 
-      if (error) {
-        throw error;
-      }
+await supabase.auth.signOut();
 
 
       /*

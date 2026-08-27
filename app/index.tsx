@@ -2,6 +2,11 @@ import React, {
     useEffect,
     useRef,
 } from 'react';
+import {
+    clearUserAccess,
+    getUserAccess,
+    saveUserAccess,
+} from '../lib/user-cache';
 
 import {
     Animated,
@@ -110,217 +115,268 @@ export default function SplashScreen() {
   }
 
 
+async function checkSession() {
+  try {
 
-  async function checkSession() {
-
-    try {
-
-      /*
-        Keep splash visible long enough
-        for the animation to finish.
-      */
-
-      const minimumSplashTime =
-        new Promise<void>((resolve) => {
-
-          setTimeout(
-            () => resolve(),
-            2800
-          );
-
-        });
+    const minimumSplashTime =
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 2800);
+      });
 
 
+    /*
+      Get the locally persisted Supabase session.
+      This can still work when the phone is offline.
+    */
 
-      /*
-        Check existing login session.
-      */
-
-      const {
-        data: {
-          session,
-        },
-        error: sessionError,
-      } =
-        await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: sessionError,
+    } =
+      await supabase.auth.getSession();
 
 
-      if (sessionError) {
+    /*
+      No saved login session at all.
+    */
 
-        console.log(
-          'Session error:',
-          sessionError
-        );
+    if (
+      sessionError ||
+      !session?.user
+    ) {
 
-        await minimumSplashTime;
+      await minimumSplashTime;
 
-        router.replace(
-          '/(auth)/login'
-        );
+      router.replace(
+        '/(auth)/login'
+      );
 
-        return;
-      }
-
-
-
-      /*
-        User is not logged in.
-      */
-
-      if (!session?.user) {
-
-        await minimumSplashTime;
-
-        router.replace(
-          '/(auth)/login'
-        );
-
-        return;
-      }
+      return;
+    }
 
 
+    let role:
+      | 'admin'
+      | 'subscriber'
+      | null = null;
 
-      /*
-        User is logged in.
-        Get their role.
-      */
-
-      const {
-        data: profile,
-        error: profileError,
-      } =
-        await supabase
-          .from('profiles')
-          .select(
-            'role, is_enabled'
-          )
-          .eq(
-            'id',
-            session.user.id
-          )
-          .single();
+    let isEnabled = true;
 
 
-      if (
-        profileError ||
-        !profile
-      ) {
+    /*
+      First try to get fresh account information
+      from Supabase.
+    */
 
-        console.log(
-          'Profile error:',
-          profileError
-        );
-
-        await supabase.auth.signOut();
-
-        await minimumSplashTime;
-
-        router.replace(
-          '/(auth)/login'
-        );
-
-        return;
-      }
-
+    const {
+      data: profile,
+      error: profileError,
+    } =
+      await supabase
+        .from('profiles')
+        .select(
+          'role, is_enabled'
+        )
+        .eq(
+          'id',
+          session.user.id
+        )
+        .single();
 
 
-      /*
-        Disabled accounts cannot
-        continue using the app.
-      */
+    /*
+      ONLINE:
+      We successfully received the profile.
+    */
 
-      if (
-        profile.is_enabled === false
-      ) {
+    if (
+      !profileError &&
+      profile
+    ) {
 
-        await supabase.auth.signOut();
-
-        await minimumSplashTime;
-
-        router.replace(
-          '/(auth)/login'
-        );
-
-        return;
-      }
-
-
-
-      const role =
+      const freshRole =
         profile.role
           ?.trim()
           .toLowerCase();
 
 
+      if (
+        freshRole === 'admin' ||
+        freshRole === 'subscriber'
+      ) {
 
-      /*
-        Allow animation to finish before
-        navigating away.
-      */
+        role = freshRole;
 
-      await minimumSplashTime;
+        isEnabled =
+          profile.is_enabled !== false;
 
 
+        /*
+          Save successful account information
+          so it can be used offline later.
+        */
 
-      /*
-        ADMIN
-      */
+        saveUserAccess({
+          role: freshRole,
+          is_enabled: isEnabled,
+        });
 
-      if (role === 'admin') {
-
-        router.replace(
-          '/(admin)'
-        );
-
-        return;
       }
-
-
-
-      /*
-        SUBSCRIBER
-      */
-
-      if (role === 'subscriber') {
-
-        router.replace(
-          '/(user)'
-        );
-
-        return;
-      }
-
-
-
-      /*
-        Unknown role.
-      */
-
-      await supabase.auth.signOut();
-
-      router.replace(
-        '/(auth)/login'
-      );
-
-
-    } catch (error) {
-
-      console.log(
-        'Splash routing error:',
-        error
-      );
-
-      router.replace(
-        '/(auth)/login'
-      );
 
     }
 
+
+    /*
+      OFFLINE:
+      Profile request failed, so use the
+      last successfully cached role.
+    */
+
+    else {
+
+      console.log(
+        'Profile unavailable. Using offline cache.',
+        profileError
+      );
+
+
+      const cached =
+        getUserAccess();
+
+
+      if (cached) {
+
+        role =
+          cached.role;
+
+        isEnabled =
+          cached.is_enabled;
+
+      }
+
+    }
+
+
+    /*
+      No role online and nothing cached.
+    */
+
+    if (!role) {
+
+      await minimumSplashTime;
+
+      router.replace(
+        '/(auth)/login'
+      );
+
+      return;
+    }
+
+
+    /*
+      Disabled account.
+    */
+
+    if (!isEnabled) {
+
+      clearUserAccess();
+
+      await supabase.auth.signOut();
+
+      await minimumSplashTime;
+
+      router.replace(
+        '/(auth)/login'
+      );
+
+      return;
+    }
+
+
+    /*
+      Let splash animation finish.
+    */
+
+    await minimumSplashTime;
+
+
+    /*
+      ADMIN
+    */
+
+    if (role === 'admin') {
+
+      router.replace(
+        '/(admin)'
+      );
+
+      return;
+    }
+
+
+    /*
+      SUBSCRIBER
+    */
+
+    if (role === 'subscriber') {
+
+      router.replace(
+        '/(user)'
+      );
+
+      return;
+    }
+
+
+  } catch (error) {
+
+    console.log(
+      'Splash routing error:',
+      error
+    );
+
+
+    /*
+      Last offline fallback if something
+      unexpected happened.
+    */
+
+    const cached =
+      getUserAccess();
+
+
+    if (
+      cached?.is_enabled &&
+      cached.role === 'admin'
+    ) {
+
+      router.replace(
+        '/(admin)'
+      );
+
+      return;
+    }
+
+
+    if (
+      cached?.is_enabled &&
+      cached.role === 'subscriber'
+    ) {
+
+      router.replace(
+        '/(user)'
+      );
+
+      return;
+    }
+
+
+    router.replace(
+      '/(auth)/login'
+    );
+
   }
-
-
-
-  return (
+}
 
     <View style={styles.container}>
 
@@ -373,8 +429,6 @@ export default function SplashScreen() {
 
 
     </View>
-
-  );
 
 }
 
