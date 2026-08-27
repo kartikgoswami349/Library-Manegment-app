@@ -36,6 +36,8 @@ export default function SignupScreen() {
 
   const [email, setEmail] =
     useState('');
+    const [mobileNumber, setMobileNumber] =
+  useState('');
 
   const [password, setPassword] =
     useState('');
@@ -53,18 +55,19 @@ export default function SignupScreen() {
   async function createAccount() {
 
     if (
+      !mobileNumber.trim() ||
       !fullName.trim() ||
-      !email.trim() ||
-      !password
-    ) {
+  !email.trim() ||
+  !password
+) {
 
-      Alert.alert(
-        'Missing Information',
-        'Please enter your name, email and password.'
-      );
+  Alert.alert(
+    'Missing Information',
+    'Please enter your name, mobile number, email and password.'
+  );
 
-      return;
-    }
+  return;
+}
 
 
     if (password.length < 6) {
@@ -106,12 +109,15 @@ export default function SignupScreen() {
 
         options: {
 
-          data: {
-            full_name:
-              fullName.trim(),
-          },
+  data: {
+    full_name:
+      fullName.trim(),
 
-        },
+    mobile_number:
+      mobileNumber.trim(),
+  },
+
+},
 
       });
 
@@ -268,6 +274,15 @@ export default function SignupScreen() {
               }
               icon="person-outline"
             />
+
+            <InputField
+  label="Mobile Number"
+  placeholder="Enter your mobile number"
+  value={mobileNumber}
+  onChangeText={setMobileNumber}
+  icon="call-outline"
+  keyboardType="phone-pad"
+/>
 
 
             <InputField
@@ -473,8 +488,9 @@ function InputField({
     keyof typeof Ionicons.glyphMap;
 
   keyboardType?:
-    'default' |
-    'email-address';
+  | 'default'
+  | 'email-address'
+  | 'phone-pad';
 
   autoCapitalize?:
     'none' |

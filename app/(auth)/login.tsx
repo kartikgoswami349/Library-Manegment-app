@@ -137,7 +137,7 @@ export default function LoginScreen() {
             />
 
             <Text style={styles.appTitle}>
-              Library
+              Ashram Library
             </Text>
 
             <Text style={styles.tagline}>

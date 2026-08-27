@@ -227,7 +227,7 @@ async function loadStats() {
               </Text>
 
               <Text style={styles.headerSubtitle}>
-                Library Management
+                Ashram Library Management
               </Text>
 
             </View>
@@ -281,7 +281,7 @@ async function loadStats() {
         {/* LIBRARY OVERVIEW */}
 
 <Text style={styles.sectionTitle}>
-  Library Overview
+  Ashram Library Overview
 </Text>
 
 <View style={styles.statsRow}>

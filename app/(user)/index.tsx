@@ -339,11 +339,11 @@ return (
             <View>
 
               <Text style={styles.heading}>
-                Library
+                Ashram Library
               </Text>
 
               <Text style={styles.subheading}>
-                Find your next book
+                ज्ञान • भक्ति • अध्यात्म
               </Text>
 
             </View>
