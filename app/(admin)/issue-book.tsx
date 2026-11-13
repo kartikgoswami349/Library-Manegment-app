@@ -8,7 +8,6 @@ import {
     ActivityIndicator,
     Alert,
     Image,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -24,10 +23,6 @@ import {
 import {
     router,
 } from 'expo-router';
-
-import DateTimePicker, {
-    DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
 
 import {
     AdminBook,
@@ -46,6 +41,7 @@ import {
 import {
     Colors,
 } from '../../constants/theme';
+import { DatePickerField } from '../../components/DatePickerField';
 
 
 
@@ -76,9 +72,6 @@ export default function IssueBookScreen() {
 
   const [dueDate, setDueDate] =
     useState<string | null>(null);
-
-  const [showDatePicker, setShowDatePicker] =
-    useState(false);
 
   const [notes, setNotes] =
     useState('');
@@ -223,7 +216,7 @@ export default function IssueBookScreen() {
 
       Alert.alert(
         'Search Subscriber',
-        'Enter subscriber name or email.'
+        'Enter subscriber name or username.'
       );
 
       return;
@@ -260,30 +253,6 @@ export default function IssueBookScreen() {
 
 
 
-  function onDateChange(
-    event: DateTimePickerEvent,
-    date?: Date
-  ) {
-
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-
-
-    if (
-      event.type === 'set' &&
-      date
-    ) {
-
-      setDueDate(
-        dateToString(date)
-      );
-
-    }
-
-  }
-
-
 
   async function confirmIssue() {
 
@@ -312,7 +281,7 @@ export default function IssueBookScreen() {
     Alert.alert(
       'Confirm Issue',
 
-      `Issue #${selectedBook.serial_number} "${selectedBook.title}" to ${selectedSubscriber.full_name || selectedSubscriber.email}?`,
+      `Issue #${selectedBook.serial_number} "${selectedBook.title}" to ${selectedSubscriber.full_name || selectedSubscriber.username}?`,
 
       [
         {
@@ -571,21 +540,22 @@ export default function IssueBookScreen() {
                   }
                 >
 
-                  <View
-                    style={
-                      styles.bookIcon
-                    }
-                  >
-
-                    <Ionicons
-                      name="book-outline"
-                      size={23}
-                      color={
-                        Colors.primary
-                      }
+                  {book.cover_url ? (
+                    <Image
+                      source={{ uri: book.cover_url }}
+                      style={styles.bookCover}
+                      resizeMode="cover"
+                      accessibilityLabel={`${book.title} cover`}
                     />
-
-                  </View>
+                  ) : (
+                    <View style={styles.bookIcon}>
+                      <Ionicons
+                        name="book-outline"
+                        size={23}
+                        color={Colors.primary}
+                      />
+                    </View>
+                  )}
 
 
                   <View
@@ -651,19 +621,22 @@ export default function IssueBookScreen() {
 
           <View style={styles.selectedCard}>
 
-            <View
-              style={styles.selectedIcon}
-            >
-
-              <Ionicons
-                name="book-outline"
-                size={25}
-                color={
-                  Colors.primaryDark
-                }
+            {selectedBook.cover_url ? (
+              <Image
+                source={{ uri: selectedBook.cover_url }}
+                style={styles.selectedCover}
+                resizeMode="cover"
+                accessibilityLabel={`${selectedBook.title} cover`}
               />
-
-            </View>
+            ) : (
+              <View style={styles.selectedIcon}>
+                <Ionicons
+                  name="book-outline"
+                  size={25}
+                  color={Colors.primaryDark}
+                />
+              </View>
+            )}
 
 
             <View style={styles.selectedContent}>
@@ -737,7 +710,7 @@ export default function IssueBookScreen() {
                     setSubscriberSearch
                   }
 
-                  placeholder="Name or email..."
+                  placeholder="Name or username..."
 
                   placeholderTextColor={
                     Colors.textSecondary
@@ -815,7 +788,7 @@ export default function IssueBookScreen() {
                         subscriber
                           .full_name?.[0] ??
                         subscriber
-                          .email?.[0] ??
+                          .username?.[0] ??
                         '?'
                       ).toUpperCase()}
                     </Text>
@@ -843,7 +816,7 @@ export default function IssueBookScreen() {
                         styles.resultLine
                       }
                     >
-                      {subscriber.email}
+                      @{subscriber.username}
                     </Text>
 
                   </View>
@@ -879,7 +852,7 @@ export default function IssueBookScreen() {
                   selectedSubscriber
                     .full_name?.[0] ??
                   selectedSubscriber
-                    .email?.[0] ??
+                    .username?.[0] ??
                   '?'
                 ).toUpperCase()}
               </Text>
@@ -895,7 +868,7 @@ export default function IssueBookScreen() {
               </Text>
 
               <Text style={styles.selectedLine}>
-                {selectedSubscriber.email}
+                @{selectedSubscriber.username}
               </Text>
 
             </View>
@@ -930,57 +903,11 @@ export default function IssueBookScreen() {
         </Text>
 
 
-        <Pressable
-          onPress={() =>
-            setShowDatePicker(true)
-          }
-          style={styles.dateBox}
-        >
-
-          <Ionicons
-            name="calendar-outline"
-            size={19}
-            color={Colors.primary}
-          />
-
-          <Text style={styles.dateText}>
-            {prettyDate(dueDate)}
-          </Text>
-
-          <Ionicons
-            name="chevron-down"
-            size={16}
-            color={
-              Colors.textSecondary
-            }
-          />
-
-        </Pressable>
-
-
-        {showDatePicker && (
-
-          <DateTimePicker
-            value={
-              dueDate
-                ? dateFromString(
-                    dueDate
-                  )
-                : new Date()
-            }
-
-            mode="date"
-
-            minimumDate={
-              new Date()
-            }
-
-            onChange={
-              onDateChange
-            }
-          />
-
-        )}
+        <DatePickerField
+          value={dueDate}
+          onChange={setDueDate}
+          minimumDate={new Date()}
+        />
 
 
 
@@ -1230,6 +1157,13 @@ const styles = StyleSheet.create({
       Colors.roseMist,
   },
 
+  bookCover: {
+    width: 43,
+    height: 53,
+    borderRadius: 12,
+    backgroundColor: Colors.roseMist,
+  },
+
   personIcon: {
     width: 43,
     height: 43,
@@ -1311,6 +1245,13 @@ const styles = StyleSheet.create({
 
     backgroundColor:
       Colors.surface,
+  },
+
+  selectedCover: {
+    width: 46,
+    height: 54,
+    borderRadius: 13,
+    backgroundColor: Colors.surface,
   },
 
   selectedContent: {

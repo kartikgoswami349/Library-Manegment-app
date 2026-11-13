@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useState,
 } from 'react';
@@ -23,6 +24,7 @@ import {
 
 import {
     router,
+    useLocalSearchParams,
 } from 'expo-router';
 
 import {
@@ -45,6 +47,11 @@ type HistoryFilter =
 
 
 export default function BorrowingHistoryScreen() {
+  const { filter: routeFilter } = useLocalSearchParams<{ filter?: string }>();
+  const initialFilter: HistoryFilter =
+    routeFilter === 'issued' || routeFilter === 'returned' || routeFilter === 'overdue'
+      ? routeFilter
+      : 'all';
 
   const [
     searchText,
@@ -55,7 +62,7 @@ export default function BorrowingHistoryScreen() {
     filter,
     setFilter,
   ] =
-    useState<HistoryFilter>('all');
+    useState<HistoryFilter>(initialFilter);
 
   const [
     records,
@@ -74,23 +81,11 @@ export default function BorrowingHistoryScreen() {
     refreshing,
     setRefreshing,
   ] = useState(false);
-
-
-
-  useEffect(() => {
-
-    loadHistory('', filter);
-
-  }, []);
-
-
-
-  async function loadHistory(
-    text: string = searchText,
-    selectedFilter:
-      HistoryFilter = filter,
+  const loadHistory = useCallback(async (
+    text: string,
+    selectedFilter: HistoryFilter,
     refresh = false
-  ) {
+  ) => {
 
     try {
 
@@ -126,8 +121,12 @@ export default function BorrowingHistoryScreen() {
       setRefreshing(false);
 
     }
+  }, []);
 
-  }
+  useEffect(() => {
+    setFilter(initialFilter);
+    void loadHistory('', initialFilter);
+  }, [initialFilter, loadHistory]);
 
 
 
@@ -415,7 +414,7 @@ export default function BorrowingHistoryScreen() {
                 item
                   .subscriber_name?.[0] ??
                 item
-                  .subscriber_email?.[0] ??
+                  .subscriber_username?.[0] ??
                 '?'
               ).toUpperCase()}
             </Text>
@@ -449,11 +448,11 @@ export default function BorrowingHistoryScreen() {
 
             <Text
               style={
-                styles.subscriberEmail
+                styles.subscriberUsername
               }
               numberOfLines={1}
             >
-              {item.subscriber_email}
+              @{item.subscriber_username}
             </Text>
 
           </View>
@@ -1429,7 +1428,7 @@ const styles =
       marginTop: 1,
     },
 
-    subscriberEmail: {
+    subscriberUsername: {
       color:
         Colors.textSecondary,
 

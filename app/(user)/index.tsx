@@ -26,7 +26,7 @@ import {
     searchLibraryBooks,
 } from '../../services/books';
 
-import { supabase } from '../../lib/supabase';
+import { signOutLocal } from '../../lib/local-auth';
 
 import {
     AppTheme,
@@ -148,7 +148,7 @@ export default function UserHomeScreen() {
 
   async function logout() {
 
-    await supabase.auth.signOut();
+    await signOutLocal();
 
     router.replace('/(auth)/login');
 
@@ -1272,4 +1272,3 @@ filters: {
   },
 
 });
-

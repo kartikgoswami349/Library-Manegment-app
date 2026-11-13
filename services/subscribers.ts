@@ -1,83 +1,83 @@
-import { supabase } from '../lib/supabase';
-
+import {
+  createLocalSubscriber,
+  deleteLocalSubscriber,
+  getLocalProfile,
+  listLocalProfiles,
+  updateLocalProfile,
+} from '../lib/local-library';
 
 export type AdminSubscriber = {
   id: string;
+  username: string;
   full_name: string | null;
-  email: string | null;
-
   subscription_start: string | null;
   subscription_expiry: string | null;
-
   is_enabled: boolean;
-
   created_at: string | null;
 };
 
-
-export async function searchSubscribers(
-  searchText: string = ''
-): Promise<AdminSubscriber[]> {
-
-  const { data, error } = await supabase.rpc(
-    'admin_search_subscribers',
-    {
-      p_search_text: searchText.trim(),
-    }
-  );
-
-
-  if (error) {
-    throw error;
+function mapSubscriber(profile: Awaited<ReturnType<typeof getLocalProfile>>) {
+  if (!profile) {
+    return null;
   }
-
-
-  return data ?? [];
+  return {
+    id: profile.id,
+    username: profile.username,
+    full_name: profile.full_name,
+    subscription_start: profile.subscription_start,
+    subscription_expiry: profile.subscription_expiry,
+    is_enabled: profile.is_enabled,
+    created_at: profile.created_at,
+  };
 }
 
+export async function searchSubscribers(
+  searchText = ''
+): Promise<AdminSubscriber[]> {
+  const profiles = await listLocalProfiles(searchText, 'subscriber');
+  return profiles.map((profile) => ({
+    id: profile.id,
+    username: profile.username,
+    full_name: profile.full_name,
+    subscription_start: profile.subscription_start,
+    subscription_expiry: profile.subscription_expiry,
+    is_enabled: profile.is_enabled,
+    created_at: profile.created_at,
+  }));
+}
+
+export async function addSubscriber(
+  fullName: string,
+  mobileNumber: string
+): Promise<AdminSubscriber> {
+  const profile = await createLocalSubscriber(fullName, mobileNumber);
+  return {
+    id: profile.id,
+    username: profile.username,
+    full_name: profile.full_name,
+    subscription_start: profile.subscription_start,
+    subscription_expiry: profile.subscription_expiry,
+    is_enabled: profile.is_enabled,
+    created_at: profile.created_at,
+  };
+}
 
 export async function setSubscriberEnabled(
   userId: string,
   enabled: boolean
-) {
-
-  const { error } = await supabase.rpc(
-    'admin_set_subscriber_enabled',
-    {
-      p_user_id: userId,
-      p_enabled: enabled,
-    }
-  );
-
-
-  if (error) {
-    throw error;
-  }
-  
-
+): Promise<void> {
+  await updateLocalProfile(userId, { is_enabled: enabled });
 }
+
+export async function deleteSubscriber(userId: string): Promise<void> {
+  await deleteLocalSubscriber(userId);
+}
+
 export async function getSubscriberById(
   userId: string
 ): Promise<AdminSubscriber | null> {
-
-  const { data, error } = await supabase.rpc(
-    'admin_get_subscriber',
-    {
-      p_user_id: userId,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data || data.length === 0) {
-    return null;
-  }
-
-  return data[0];
+  return mapSubscriber(await getLocalProfile(userId));
 }
-
 
 export async function updateSubscriber(
   userId: string,
@@ -87,23 +87,11 @@ export async function updateSubscriber(
     subscription_expiry: string | null;
     is_enabled: boolean;
   }
-) {
-
-  const { error } = await supabase.rpc(
-    'admin_update_subscriber',
-    {
-      p_user_id: userId,
-      p_full_name: values.full_name.trim(),
-      p_subscription_start:
-        values.subscription_start,
-      p_subscription_expiry:
-        values.subscription_expiry,
-      p_is_enabled:
-        values.is_enabled,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
+): Promise<void> {
+  await updateLocalProfile(userId, {
+    full_name: values.full_name.trim() || null,
+    subscription_start: values.subscription_start,
+    subscription_expiry: values.subscription_expiry,
+    is_enabled: values.is_enabled,
+  });
 }

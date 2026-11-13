@@ -422,17 +422,7 @@ export default function EditBookScreen() {
       }
 
 
-      Alert.alert(
-        'Book Updated',
-        `"${title.trim()}" has been updated successfully.`,
-        [
-          {
-            text: 'Done',
-            onPress: () =>
-              router.back(),
-          },
-        ]
-      );
+      router.back();
 
 
     } catch (error: any) {

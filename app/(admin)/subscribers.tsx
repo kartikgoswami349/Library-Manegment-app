@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -15,15 +15,17 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import {
     AdminSubscriber,
+    deleteSubscriber,
     searchSubscribers,
     setSubscriberEnabled,
 } from '../../services/subscribers';
 
 import { Colors } from '../../constants/theme';
+import { RefreshStatusBar } from '../../components/RefreshStatusBar';
 
 
 export default function SubscribersScreen() {
@@ -39,11 +41,15 @@ export default function SubscribersScreen() {
 
   const [refreshing, setRefreshing] =
     useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState(false);
 
 
-  useEffect(() => {
-    loadSubscribers();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void loadSubscribers();
+    }, [])
+  );
 
 
   async function loadSubscribers(
@@ -64,6 +70,8 @@ export default function SubscribersScreen() {
         await searchSubscribers(text);
 
       setSubscribers(result);
+      setStatusMessage('Subscriber data refreshed.');
+      setStatusError(false);
 
 
     } catch (error: any) {
@@ -72,6 +80,8 @@ export default function SubscribersScreen() {
         'Unable to Load Subscribers',
         error?.message ?? 'Something went wrong.'
       );
+      setStatusMessage(error?.message ?? 'Unable to refresh subscribers.');
+      setStatusError(true);
 
     } finally {
 
@@ -80,6 +90,12 @@ export default function SubscribersScreen() {
 
     }
 
+  }
+
+  function openAddSubscriber() {
+    router.push(
+      { pathname: '/(admin)/add-subscriber' } as unknown as Parameters<typeof router.push>[0]
+    );
   }
 
 
@@ -132,11 +148,19 @@ export default function SubscribersScreen() {
                 newStatus
               );
 
-              await loadSubscribers(
-                searchText
+              setSubscribers((current) =>
+                current.map((item) =>
+                  item.id === subscriber.id
+                    ? { ...item, is_enabled: newStatus }
+                    : item
+                )
               );
-
-
+              setStatusMessage(
+                newStatus
+                  ? `${subscriber.full_name ?? 'Subscriber'} enabled.`
+                  : `${subscriber.full_name ?? 'Subscriber'} disabled.`
+              );
+              setStatusError(false);
             } catch (error: any) {
 
               Alert.alert(
@@ -144,6 +168,8 @@ export default function SubscribersScreen() {
                 error?.message ??
                   'Unable to update account.'
               );
+              setStatusMessage(error?.message ?? 'Unable to update subscriber status.');
+              setStatusError(true);
 
             }
 
@@ -152,6 +178,37 @@ export default function SubscribersScreen() {
       ]
     );
 
+  }
+
+  function removeSubscriber(subscriber: AdminSubscriber) {
+    Alert.alert(
+      'Delete Subscriber',
+      `Delete ${subscriber.full_name ?? 'this subscriber'}? Existing loan history will be preserved and the subscriber will be hidden.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSubscriber(subscriber.id);
+              setSubscribers((current) =>
+                current.filter((item) => item.id !== subscriber.id)
+              );
+              setStatusMessage(`${subscriber.full_name ?? 'Subscriber'} deleted.`);
+              setStatusError(false);
+            } catch (error: any) {
+              setStatusMessage(error?.message ?? 'Unable to delete subscriber.');
+              setStatusError(true);
+              Alert.alert(
+                'Delete Failed',
+                error?.message ?? 'Unable to delete subscriber.'
+              );
+            }
+          },
+        },
+      ]
+    );
   }
 
 
@@ -185,15 +242,12 @@ export default function SubscribersScreen() {
 
     return (
 
-      <Pressable
-        style={({ pressed }) => [
+      <View
+        style={[
           styles.card,
 
           !item.is_enabled &&
             styles.disabledCard,
-
-          pressed &&
-            styles.pressed,
         ]}
       >
 
@@ -202,7 +256,7 @@ export default function SubscribersScreen() {
           <Text style={styles.avatarText}>
             {(
               item.full_name?.trim()?.[0] ??
-              item.email?.[0] ??
+              item.username?.[0] ??
               '?'
             ).toUpperCase()}
           </Text>
@@ -254,16 +308,16 @@ export default function SubscribersScreen() {
           <View style={styles.infoRow}>
 
             <Ionicons
-              name="mail-outline"
+              name="person-outline"
               size={13}
               color={Colors.textSecondary}
             />
 
             <Text
-              style={styles.email}
+              style={styles.username}
               numberOfLines={1}
             >
-              {item.email || 'No email'}
+              @{item.username}
             </Text>
 
           </View>
@@ -335,13 +389,7 @@ export default function SubscribersScreen() {
 
 
             <Pressable
-              onPress={(event) => {
-
-                event.stopPropagation();
-
-                changeStatus(item);
-
-              }}
+              onPress={() => changeStatus(item)}
               style={[
                 styles.statusButton,
 
@@ -386,11 +434,19 @@ export default function SubscribersScreen() {
 
             </Pressable>
 
+            <Pressable
+              onPress={() => removeSubscriber(item)}
+              style={styles.deleteButton}
+            >
+              <Ionicons name="trash-outline" size={15} color={Colors.danger} />
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </Pressable>
+
           </View>
 
         </View>
 
-      </Pressable>
+      </View>
 
     );
 
@@ -442,8 +498,18 @@ export default function SubscribersScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
+          <Pressable onPress={openAddSubscriber} style={styles.addButton}>
+            <Ionicons name="person-add-outline" size={18} color={Colors.surface} />
+          </Pressable>
 
         </View>
+
+        <RefreshStatusBar
+          onRefresh={() => void loadSubscribers(searchText, true)}
+          refreshing={refreshing}
+          message={statusMessage}
+          error={statusError}
+        />
 
 
 
@@ -462,7 +528,7 @@ export default function SubscribersScreen() {
             <TextInput
               value={searchText}
               onChangeText={setSearchText}
-              placeholder="Search name or email..."
+              placeholder="Search name or username..."
               placeholderTextColor={
                 Colors.textSecondary
               }
@@ -590,7 +656,7 @@ export default function SubscribersScreen() {
                 </Text>
 
                 <Text style={styles.emptyText}>
-                  New user accounts will appear here.
+                  Add subscribers manually for borrowing.
                 </Text>
 
               </View>
@@ -803,7 +869,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
-  email: {
+  username: {
     flex: 1,
     color: Colors.textSecondary,
     fontSize: 10,
@@ -927,6 +993,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  deleteButton: {
+    height: 31,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: '#FFF5F6',
+    borderColor: '#F4CDD4',
+  },
+
+  deleteButtonText: {
+    color: Colors.danger,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
   loadingArea: {
     flex: 1,
     alignItems: 'center',
@@ -963,6 +1047,15 @@ const styles = StyleSheet.create({
 
   pressed: {
     opacity: 0.8,
+  },
+  addButton: {
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    height: 40,
+    justifyContent: 'center',
+    marginLeft: 8,
+    width: 40,
   },
 
 });

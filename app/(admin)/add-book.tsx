@@ -6,6 +6,7 @@ import {
     Alert,
     Image,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -61,34 +62,17 @@ export default function AddBookScreen() {
   const [coverUri, setCoverUri] =
     useState<string | null>(null);
 
+  const [coverOptionsVisible, setCoverOptionsVisible] = useState(false);
+  const [coverPickerError, setCoverPickerError] = useState<string | null>(null);
+
   const [saving, setSaving] =
     useState(false);
 
 
   function selectCover() {
-
-  Alert.alert(
-    'Add Book Cover',
-    'Choose how you want to add the cover.',
-    [
-      {
-        text: 'Take Photo',
-        onPress: takeCoverPhoto,
-      },
-
-      {
-        text: 'Choose from Gallery',
-        onPress: chooseCoverFromGallery,
-      },
-
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-    ]
-  );
-
-}
+    setCoverPickerError(null);
+    setCoverOptionsVisible(true);
+  }
 
 
 
@@ -159,43 +143,37 @@ async function chooseCoverFromGallery() {
 
   try {
 
-    const permission =
-      await ImagePicker
-        .requestMediaLibraryPermissionsAsync();
-
-
-    if (!permission.granted) {
-
-      Alert.alert(
-        'Photos Permission Required',
-        'Please allow access to your photos to select a book cover.'
-      );
-
+    setCoverPickerError(null);
+    const desktop =
+      typeof window !== 'undefined' ? window.libraryDesktop : undefined;
+    if (Platform.OS === 'web' && desktop?.isElectron) {
+      const selectedPath = await desktop.chooseFile({
+        filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
+      });
+      if (!selectedPath) return;
+      const file = await desktop.readFile(selectedPath);
+      const extension = selectedPath.split('.').pop()?.toLowerCase();
+      const mimeType =
+        extension === 'png'
+          ? 'image/png'
+          : extension === 'webp'
+            ? 'image/webp'
+            : extension === 'gif'
+              ? 'image/gif'
+              : 'image/jpeg';
+      setCoverUri(`data:${mimeType};base64,${file.data}`);
       return;
     }
 
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [2, 3],
+      quality: 0.8,
+    });
 
-    const result =
-      await ImagePicker
-        .launchImageLibraryAsync({
-
-          mediaTypes: ['images'],
-
-          allowsEditing: true,
-
-          aspect: [2, 3],
-
-          quality: 0.8,
-
-        });
-
-
-    if (!result.canceled) {
-
-      setCoverUri(
-        result.assets[0].uri
-      );
-
+    if (!result.canceled && result.assets[0]?.uri) {
+      setCoverUri(result.assets[0].uri);
     }
 
 
@@ -205,16 +183,24 @@ async function chooseCoverFromGallery() {
       'Gallery error:',
       error
     );
-
-
-    Alert.alert(
-      'Gallery Error',
-      'Unable to open your photos.'
+    setCoverPickerError(
+      error instanceof Error ? error.message : 'Unable to open your photos.'
     );
+    setCoverOptionsVisible(true);
 
   }
 
 }
+
+  async function pickCoverFromGallery() {
+    setCoverOptionsVisible(false);
+    await chooseCoverFromGallery();
+  }
+
+  async function captureCoverPhoto() {
+    setCoverOptionsVisible(false);
+    await takeCoverPhoto();
+  }
 
 
   function removeCover() {
@@ -342,27 +328,7 @@ async function chooseCoverFromGallery() {
       });
 
 
-      Alert.alert(
-        'Book Added',
-        `"${title.trim()}" has been added successfully.`,
-        [
-          {
-            text: 'Add Another',
-
-            onPress: () => {
-              resetForm();
-            },
-          },
-
-          {
-            text: 'Done',
-
-            onPress: () => {
-              router.back();
-            },
-          },
-        ]
-      );
+      router.back();
 
 
     } catch (error: any) {
@@ -384,20 +350,6 @@ async function chooseCoverFromGallery() {
       setSaving(false);
 
     }
-
-  }
-
-
-  function resetForm() {
-
-    setSerialNumber('');
-    setTitle('');
-    setAuthor('');
-    setPublisher('');
-    setLocation('');
-    setCost('');
-    setCategory('');
-    setCoverUri(null);
 
   }
 
@@ -780,6 +732,68 @@ async function chooseCoverFromGallery() {
 
       </KeyboardAvoidingView>
 
+      <Modal
+        visible={coverOptionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCoverOptionsVisible(false)}
+      >
+        <View style={styles.coverModalOverlay}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close cover options"
+            style={styles.coverModalBackdrop}
+            onPress={() => setCoverOptionsVisible(false)}
+          />
+          <View style={styles.coverModalCard}>
+            <Text style={styles.coverModalTitle}>Add Book Cover</Text>
+            <Text style={styles.coverModalSubtitle}>
+              Choose an image for this book.
+            </Text>
+
+            {coverPickerError && (
+              <Text style={styles.coverModalError}>{coverPickerError}</Text>
+            )}
+
+            {Platform.OS !== 'web' && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void captureCoverPhoto()}
+                style={({ pressed }) => [
+                  styles.coverOption,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+                <Text style={styles.coverOptionText}>Take Photo</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void pickCoverFromGallery()}
+              style={({ pressed }) => [
+                styles.coverOption,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="images-outline" size={20} color={Colors.primary} />
+              <Text style={styles.coverOptionText}>
+                {Platform.OS === 'web' ? 'Choose Image' : 'Choose from Gallery'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setCoverOptionsVisible(false)}
+              style={styles.coverCancelButton}
+            >
+              <Text style={styles.coverCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
 
   );
@@ -1028,6 +1042,76 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  coverModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(32, 20, 26, 0.42)',
+  },
+
+  coverModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  coverModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+
+  coverModalTitle: {
+    color: Colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+
+  coverModalSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+
+  coverModalError: {
+    color: Colors.danger,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+
+  coverOption: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.roseMist,
+    marginTop: 8,
+  },
+
+  coverOptionText: {
+    color: Colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  coverCancelButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 42,
+    marginTop: 8,
+  },
+
+  coverCancelText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 
   coverActions: {
     flexDirection: 'row',

@@ -7,7 +7,6 @@ import {
     ActivityIndicator,
     Alert,
     Image,
-    Platform,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -27,10 +26,6 @@ import {
     useLocalSearchParams,
 } from 'expo-router';
 
-import DateTimePicker, {
-    DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
-
 import {
     AdminSubscriber,
     getSubscriberById,
@@ -40,6 +35,7 @@ import {
 import {
     Colors,
 } from '../../../constants/theme';
+import { DatePickerField } from '../../../components/DatePickerField';
 
 
 export default function SubscriberDetailsScreen() {
@@ -63,12 +59,6 @@ export default function SubscriberDetailsScreen() {
 
   const [enabled, setEnabled] =
     useState(true);
-
-  const [showStartPicker, setShowStartPicker] =
-    useState(false);
-
-  const [showExpiryPicker, setShowExpiryPicker] =
-    useState(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -200,48 +190,6 @@ export default function SubscriberDetailsScreen() {
           year: 'numeric',
         }
       );
-
-  }
-
-
-  function onStartChange(
-    event: DateTimePickerEvent,
-    date?: Date
-  ) {
-
-    if (Platform.OS === 'android') {
-      setShowStartPicker(false);
-    }
-
-    if (
-      event.type === 'set' &&
-      date
-    ) {
-      setStartDate(
-        dateToString(date)
-      );
-    }
-
-  }
-
-
-  function onExpiryChange(
-    event: DateTimePickerEvent,
-    date?: Date
-  ) {
-
-    if (Platform.OS === 'android') {
-      setShowExpiryPicker(false);
-    }
-
-    if (
-      event.type === 'set' &&
-      date
-    ) {
-      setExpiryDate(
-        dateToString(date)
-      );
-    }
 
   }
 
@@ -420,7 +368,7 @@ export default function SubscriberDetailsScreen() {
             <Text style={styles.avatarText}>
               {(
                 fullName.trim()[0] ??
-                subscriber.email?.[0] ??
+                subscriber.username?.[0] ??
                 '?'
               ).toUpperCase()}
             </Text>
@@ -435,10 +383,10 @@ export default function SubscriberDetailsScreen() {
             </Text>
 
             <Text
-              style={styles.email}
+              style={styles.username}
               numberOfLines={1}
             >
-              {subscriber.email}
+              @{subscriber.username}
             </Text>
 
           </View>
@@ -505,7 +453,7 @@ export default function SubscriberDetailsScreen() {
 
 
           <Text style={styles.label}>
-            Email Address
+            Username
           </Text>
 
           <View
@@ -516,7 +464,7 @@ export default function SubscriberDetailsScreen() {
           >
 
             <Ionicons
-              name="mail-outline"
+              name="person-outline"
               size={18}
               color={Colors.textSecondary}
             />
@@ -525,13 +473,13 @@ export default function SubscriberDetailsScreen() {
               style={styles.readOnlyText}
               numberOfLines={1}
             >
-              {subscriber.email}
+              @{subscriber.username}
             </Text>
 
           </View>
 
           <Text style={styles.helperText}>
-            Email cannot be changed from this screen.
+            Username is used to sign in.
           </Text>
 
         </View>
@@ -551,30 +499,10 @@ export default function SubscriberDetailsScreen() {
             Subscription Start
           </Text>
 
-          <Pressable
-            onPress={() =>
-              setShowStartPicker(true)
-            }
-            style={styles.dateBox}
-          >
-
-            <Ionicons
-              name="calendar-outline"
-              size={18}
-              color={Colors.primary}
-            />
-
-            <Text style={styles.dateText}>
-              {prettyDate(startDate)}
-            </Text>
-
-            <Ionicons
-              name="chevron-down"
-              size={16}
-              color={Colors.textSecondary}
-            />
-
-          </Pressable>
+          <DatePickerField
+            value={startDate}
+            onChange={setStartDate}
+          />
 
 
           {startDate && (
@@ -593,22 +521,6 @@ export default function SubscriberDetailsScreen() {
           )}
 
 
-          {showStartPicker && (
-
-            <DateTimePicker
-              value={
-                dateFromString(
-                  startDate
-                )
-              }
-              mode="date"
-              onChange={
-                onStartChange
-              }
-            />
-
-          )}
-
 
 
           <Text
@@ -621,30 +533,11 @@ export default function SubscriberDetailsScreen() {
           </Text>
 
 
-          <Pressable
-            onPress={() =>
-              setShowExpiryPicker(true)
-            }
-            style={styles.dateBox}
-          >
-
-            <Ionicons
-              name="calendar-outline"
-              size={18}
-              color={Colors.primary}
-            />
-
-            <Text style={styles.dateText}>
-              {prettyDate(expiryDate)}
-            </Text>
-
-            <Ionicons
-              name="chevron-down"
-              size={16}
-              color={Colors.textSecondary}
-            />
-
-          </Pressable>
+          <DatePickerField
+            value={expiryDate}
+            onChange={setExpiryDate}
+            minimumDate={startDate ? dateFromString(startDate) : undefined}
+          />
 
 
           {expiryDate && (
@@ -662,22 +555,6 @@ export default function SubscriberDetailsScreen() {
 
           )}
 
-
-          {showExpiryPicker && (
-
-            <DateTimePicker
-              value={
-                dateFromString(
-                  expiryDate
-                )
-              }
-              mode="date"
-              onChange={
-                onExpiryChange
-              }
-            />
-
-          )}
 
 
           <View style={styles.subscriptionNote}>
@@ -933,7 +810,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  email: {
+  username: {
     color: Colors.textSecondary,
     fontSize: 10,
     marginTop: 3,

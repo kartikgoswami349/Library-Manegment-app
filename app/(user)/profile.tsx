@@ -214,7 +214,7 @@ export default function ProfileScreen() {
             <Text style={styles.avatarText}>
               {(
                 name[0] ??
-                profile.email?.[0] ??
+                profile.username[0] ??
                 '?'
               ).toUpperCase()}
             </Text>
@@ -224,8 +224,8 @@ export default function ProfileScreen() {
             {name}
           </Text>
 
-          <Text style={styles.email}>
-            {profile.email}
+          <Text style={styles.username}>
+            @{profile.username}
           </Text>
 
         </View>
@@ -261,17 +261,6 @@ export default function ProfileScreen() {
   keyboardType="phone-pad"
   maxLength={15}
 />
-
-
-          <Text style={styles.label}>
-            Email
-          </Text>
-
-          <View style={styles.readOnly}>
-            <Text style={styles.readOnlyText}>
-              {profile.email}
-            </Text>
-          </View>
 
 
           <Text style={styles.label}>
@@ -434,7 +423,7 @@ logo: {
     marginTop: 9,
   },
 
-  email: {
+  username: {
     color:
       Colors.textSecondary,
 
@@ -505,26 +494,6 @@ passwordButtonText: {
   fontSize: 11,
   marginTop: 3,
 },
-
-  readOnly: {
-    minHeight: 45,
-
-    justifyContent: 'center',
-
-    paddingHorizontal: 11,
-
-    borderRadius: 12,
-
-    backgroundColor:
-      '#F6F3F4',
-  },
-
-  readOnlyText: {
-    color:
-      Colors.textSecondary,
-
-    fontSize: 11,
-  },
 
   infoText: {
     color:
