@@ -1,4 +1,14 @@
-import { supabase } from '../lib/supabase';
+import { Buffer } from 'buffer';
+import { Platform } from 'react-native';
+
+import {
+  countLocalBooks,
+  createLocalBook,
+  getLocalBookById,
+  localSerialExists,
+  searchLocalBooks,
+  updateLocalBook,
+} from '../lib/local-library';
 
 export type SearchMode =
   | 'title'
@@ -17,220 +27,89 @@ export type LibraryBook = {
   cost: number | null;
   category: string | null;
   cover_path: string | null;
+  index_path: string | null;
   is_available: boolean;
   cover_url: string | null;
 };
-export async function uploadBookCover(
-  imageUri: string,
-  serialNumber: string
-): Promise<string> {
-  const response = await fetch(imageUri);
 
-  const arrayBuffer =
-    await response.arrayBuffer();
+function addLocalCoverUrl(book: LibraryBook): LibraryBook {
+  const coverUrl = book.cover_path?.trim() || null;
+  return { ...book, cover_url: coverUrl };
+}
 
-  const extension =
-    imageUri
-      .split('.')
-      .pop()
-      ?.toLowerCase()
-      ?.split('?')[0] || 'jpg';
+function mimeTypeForUri(uri: string): string {
+  const extension = uri.split('?')[0].split('.').pop()?.toLowerCase();
+  if (extension === 'png') return 'image/png';
+  if (extension === 'webp') return 'image/webp';
+  if (extension === 'gif') return 'image/gif';
+  return 'image/jpeg';
+}
 
-  const safeExtension =
-    ['jpg', 'jpeg', 'png', 'webp'].includes(
-      extension
-    )
-      ? extension
-      : 'jpg';
-
-  const safeSerial =
-    serialNumber
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, '_');
-
-  const filePath =
-    `${safeSerial}-${Date.now()}.${safeExtension}`;
-
-  const { error } =
-    await supabase.storage
-      .from('book-covers')
-      .upload(
-        filePath,
-        arrayBuffer,
-        {
-          contentType:
-            safeExtension === 'png'
-              ? 'image/png'
-              : safeExtension === 'webp'
-              ? 'image/webp'
-              : 'image/jpeg',
-
-          upsert: false,
-        }
-      );
-
-  if (error) {
-    throw error;
+function localFilePathFromUri(uri: string): string {
+  if (!uri.toLowerCase().startsWith('file://')) {
+    return uri;
   }
 
-  return filePath;
+  const parsed = new URL(uri);
+  const decodedPath = decodeURIComponent(parsed.pathname);
+  if (parsed.hostname && parsed.hostname !== 'localhost') {
+    return `\\\\${parsed.hostname}${decodedPath.replace(/\//g, '\\')}`;
+  }
+  return decodedPath.replace(/^\/([A-Za-z]:\/)/, '$1');
+}
+
+async function toPersistentWebCover(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) {
+    return uri;
+  }
+
+  const desktop = typeof window !== 'undefined' ? window.libraryDesktop : null;
+  if (desktop?.isElectron && (uri.startsWith('file://') || /^[A-Za-z]:[\\/]/.test(uri))) {
+    const file = await desktop.readFile(localFilePathFromUri(uri));
+    return `data:${mimeTypeForUri(uri)};base64,${file.data}`;
+  }
+
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Unable to read the selected cover image (${response.status}).`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return `data:${response.headers.get('content-type') || mimeTypeForUri(uri)};base64,${Buffer.from(bytes).toString('base64')}`;
+}
+
+export async function uploadBookCover(
+  imageUri: string,
+  _serialNumber: string
+): Promise<string> {
+  return Platform.OS === 'web' ? toPersistentWebCover(imageUri) : imageUri;
 }
 
 export async function searchLibraryBooks(
-  searchText: string = '',
+  searchText = '',
   searchBy: SearchMode = 'title'
 ): Promise<LibraryBook[]> {
-
-  const { data, error } = await supabase.rpc(
-    'search_library_books',
-    {
-      p_search_text: searchText.trim(),
-      p_search_by: searchBy,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  const books = data ?? [];
-
-  const booksWithCovers = await Promise.all(
-    books.map(async (book: any) => {
-
-      let coverUrl: string | null = null;
-
-      if (book.cover_path) {
-        const { data: signedData, error: signedError } =
-          await supabase.storage
-            .from('book-covers')
-            .createSignedUrl(book.cover_path, 3600);
-
-        if (!signedError && signedData) {
-          coverUrl = signedData.signedUrl;
-        }
-      }
-
-      return {
-        ...book,
-        cover_url: coverUrl,
-      };
-    })
-  );
-
-  return booksWithCovers;
+  const books = await searchLocalBooks(searchText, searchBy, false, true);
+  return books.map(addLocalCoverUrl);
 }
+
 export async function getCatalogBooks(
-  offset: number = 0,
-  limit: number = 30
-): Promise<{
-  books: LibraryBook[];
-  total: number;
-}> {
-  const { data, error } = await supabase.rpc(
-    'get_library_catalog',
-    {
-      p_offset: offset,
-      p_limit: limit,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = data ?? [];
-
-  const total =
-    rows.length > 0
-      ? Number(rows[0].total_count ?? 0)
-      : 0;
-
-  const books = await Promise.all(
-    rows.map(async (row: any) => {
-      const {
-        total_count,
-        ...book
-      } = row;
-
-      let coverUrl: string | null = null;
-
-      if (book.cover_path) {
-        const {
-          data: signedData,
-          error: signedError,
-        } = await supabase.storage
-          .from('book-covers')
-          .createSignedUrl(
-            book.cover_path,
-            3600
-          );
-
-        if (!signedError && signedData) {
-          coverUrl =
-            signedData.signedUrl;
-        }
-      }
-
-      return {
-        ...book,
-        cover_url: coverUrl,
-      };
-    })
-  );
-
-  return {
-    books,
-    total,
-  };
+  offset = 0,
+  limit = 30
+): Promise<{ books: LibraryBook[]; total: number }> {
+  const [books, total] = await Promise.all([
+    searchLocalBooks('', 'title', false, false, offset, limit),
+    countLocalBooks(),
+  ]);
+  return { books: books.map(addLocalCoverUrl), total };
 }
 
 export async function getLibraryBookById(
   bookId: string
 ): Promise<LibraryBook | null> {
-
-  const { data, error } = await supabase.rpc(
-    'get_library_book',
-    {
-      p_book_id: bookId,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data || data.length === 0) {
-    return null;
-  }
-
-  const book = data[0];
-
-  let coverUrl: string | null = null;
-
-  if (book.cover_path) {
-
-    const {
-      data: signedData,
-      error: signedError,
-    } = await supabase.storage
-      .from('book-covers')
-      .createSignedUrl(
-        book.cover_path,
-        3600
-      );
-
-    if (!signedError && signedData) {
-      coverUrl = signedData.signedUrl;
-    }
-
-  }
-
-  return {
-    ...book,
-    cover_url: coverUrl,
-  };
+  const book = await getLocalBookById(bookId);
+  return book ? addLocalCoverUrl(book) : null;
 }
+
 export type NewBookInput = {
   serial_number: string;
   title: string;
@@ -242,121 +121,58 @@ export type NewBookInput = {
   cover_path: string | null;
 };
 
-
-export async function createBook(
-  book: NewBookInput
-) {
-  const { data, error } = await supabase
-    .from('books')
-    .insert({
-      serial_number: book.serial_number.trim(),
-      title: book.title.trim(),
-      author: book.author.trim(),
-
-      publisher:
-        book.publisher?.trim() || null,
-
-      location:
-        book.location?.trim() || null,
-
-      cost: book.cost,
-
-      category:
-        book.category?.trim() || null,
-
-      cover_path: book.cover_path,
-
-      is_active: true,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+export async function createBook(book: NewBookInput) {
+  return createLocalBook({
+    serial_number: book.serial_number.trim(),
+    title: book.title.trim(),
+    author: book.author.trim(),
+    publisher: book.publisher?.trim() || null,
+    location: book.location?.trim() || null,
+    cost: book.cost,
+    category: book.category?.trim() || null,
+    cover_path: book.cover_path,
+    index_path: null,
+    is_active: true,
+  });
 }
 
-
-export async function serialNumberExists(
-  serialNumber: string
-): Promise<boolean> {
-
-  const { data, error } = await supabase
-    .from('books')
-    .select('id')
-    .eq(
-      'serial_number',
-      serialNumber.trim()
-    )
-    .limit(1);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data?.length ?? 0) > 0;
+export async function serialNumberExists(serialNumber: string): Promise<boolean> {
+  return localSerialExists(serialNumber);
 }
+
 export type AdminBook = LibraryBook & {
   is_active: boolean;
 };
 
-
 export async function searchAdminBooks(
-  searchText: string = ''
+  searchText = '',
+  searchBy: SearchMode = 'title'
 ): Promise<AdminBook[]> {
-
-  const { data, error } = await supabase.rpc(
-    'admin_search_books',
-    {
-      p_search_text: searchText.trim(),
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-
-  const rows = data ?? [];
-
-
+  const books = await searchLocalBooks(searchText, searchBy, true);
+  const desktop = typeof window !== 'undefined' ? window.libraryDesktop : null;
   return Promise.all(
-    rows.map(async (book: any) => {
+    books.map(async (book) => {
+      const coverPath = book.cover_path?.trim() || null;
+      const isLocalFile =
+        coverPath?.toLowerCase().startsWith('file://') ||
+        (coverPath !== null && /^[A-Za-z]:[\\/]/.test(coverPath));
+      let coverUrl = coverPath;
 
-      let coverUrl: string | null = null;
-
-
-      if (book.cover_path) {
-
-        const {
-          data: signedData,
-          error: signedError,
-        } = await supabase.storage
-          .from('book-covers')
-          .createSignedUrl(
-            book.cover_path,
-            3600
-          );
-
-
-        if (
-          !signedError &&
-          signedData
-        ) {
-          coverUrl =
-            signedData.signedUrl;
+      if (coverPath && isLocalFile && desktop?.isElectron) {
+        try {
+          const file = await desktop.readFile(localFilePathFromUri(coverPath));
+          coverUrl = `data:${mimeTypeForUri(coverPath)};base64,${file.data}`;
+        } catch (error) {
+          console.warn(`Unable to load the cover for book ${book.id}:`, error);
+          coverUrl = null;
         }
-
       }
-
 
       return {
         ...book,
         cover_url: coverUrl,
+        is_active: book.is_active,
       };
-
     })
   );
 }
@@ -364,67 +180,15 @@ export async function searchAdminBooks(
 export async function getAdminBookById(
   bookId: string
 ): Promise<AdminBook | null> {
-
-  const { data, error } = await supabase.rpc(
-    'admin_get_book',
-    {
-      p_book_id: bookId,
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data || data.length === 0) {
-    return null;
-  }
-
-  const book = data[0];
-
-  let coverUrl: string | null = null;
-
-  if (book.cover_path) {
-
-    const {
-      data: signedData,
-      error: signedError,
-    } = await supabase.storage
-      .from('book-covers')
-      .createSignedUrl(
-        book.cover_path,
-        3600
-      );
-
-    if (!signedError && signedData) {
-      coverUrl =
-        signedData.signedUrl;
-    }
-
-  }
-
-  return {
-    ...book,
-    cover_url: coverUrl,
-  };
+  const book = await getLocalBookById(bookId);
+  return book
+    ? { ...addLocalCoverUrl(book), is_active: book.is_active }
+    : null;
 }
 
-
-export async function deleteBookCover(
-  filePath: string
-) {
-
-  const { error } =
-    await supabase.storage
-      .from('book-covers')
-      .remove([filePath]);
-
-  if (error) {
-    throw error;
-  }
-
+export async function deleteBookCover(_filePath: string): Promise<void> {
+  // Covers are local image URIs, not remote storage objects.
 }
-
 
 export async function updateBook(
   bookId: string,
@@ -439,73 +203,30 @@ export async function updateBook(
     cover_path?: string | null;
   }
 ) {
-
-  const { data, error } =
-    await supabase
-      .from('books')
-      .update({
-        ...updates,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq('id', bookId)
-      .select()
-      .single();
-
-
-  if (error) {
-    throw error;
-  }
-
-
-  return data;
+  return updateLocalBook(bookId, {
+    serial_number: updates.serial_number.trim(),
+    title: updates.title.trim(),
+    author: updates.author.trim(),
+    publisher: updates.publisher?.trim() || null,
+    location: updates.location?.trim() || null,
+    cost: updates.cost,
+    category: updates.category?.trim() || null,
+    ...(updates.cover_path === undefined
+      ? {}
+      : { cover_path: updates.cover_path }),
+  });
 }
-
 
 export async function setBookActiveStatus(
   bookId: string,
   active: boolean
-) {
-
-  const { error } =
-    await supabase
-      .from('books')
-      .update({
-        is_active: active,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq('id', bookId);
-
-
-  if (error) {
-    throw error;
-  }
-
+): Promise<void> {
+  await updateLocalBook(bookId, { is_active: active });
 }
-
 
 export async function serialBelongsToAnotherBook(
   serialNumber: string,
   bookId: string
 ): Promise<boolean> {
-
-  const { data, error } =
-    await supabase
-      .from('books')
-      .select('id')
-      .eq(
-        'serial_number',
-        serialNumber.trim()
-      )
-      .neq('id', bookId)
-      .limit(1);
-
-
-  if (error) {
-    throw error;
-  }
-
-
-  return (data?.length ?? 0) > 0;
+  return localSerialExists(serialNumber, bookId);
 }

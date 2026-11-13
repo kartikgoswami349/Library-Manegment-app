@@ -1,5 +1,10 @@
-import { supabase } from '../lib/supabase';
-
+import {
+  createLocalBorrowing,
+  listLocalActiveBorrowings,
+  listLocalBorrowingHistory,
+  returnLocalBorrowing,
+} from '../lib/local-library';
+import { getUserAccess } from '../lib/user-cache';
 
 export async function issueBook(
   bookId: string,
@@ -7,31 +12,18 @@ export async function issueBook(
   dueDate: string | null,
   notes: string | null
 ): Promise<string> {
-
-  const {
-    data,
-    error,
-  } = await supabase.rpc(
-    'admin_issue_book',
-    {
-      p_book_id: bookId,
-      p_subscriber_id: subscriberId,
-      p_due_date: dueDate,
-      p_notes: notes,
-    }
+  const access = await getUserAccess();
+  return createLocalBorrowing(
+    bookId,
+    subscriberId,
+    dueDate,
+    notes,
+    access?.id ?? null
   );
-
-
-  if (error) {
-    throw error;
-  }
-
-
-  return data as string;
 }
+
 export type ActiveBorrowing = {
   borrowing_id: string;
-
   book_id: string;
   serial_number: string;
   title: string;
@@ -39,107 +31,47 @@ export type ActiveBorrowing = {
   publisher: string | null;
   cover_path: string | null;
   cover_url?: string | null;
-
   subscriber_id: string;
   subscriber_name: string | null;
-  subscriber_email: string | null;
-
+  subscriber_username: string | null;
   issued_at: string;
   due_date: string | null;
   notes: string | null;
 };
 
+function mapBorrowing(row: Awaited<ReturnType<typeof listLocalActiveBorrowings>>[number]) {
+  return {
+    borrowing_id: row.id,
+    book_id: row.book_id,
+    serial_number: row.serial_number ?? '',
+    title: row.title ?? '',
+    author: row.author ?? '',
+    publisher: row.publisher,
+    cover_path: row.cover_path,
+    cover_url: null,
+    subscriber_id: row.subscriber_id,
+    subscriber_name: row.subscriber_name,
+    subscriber_username: row.subscriber_username,
+    issued_at: row.issued_at,
+    due_date: row.due_date,
+    notes: row.notes,
+  };
+}
 
 export async function searchActiveBorrowings(
-  searchText: string = ''
+  searchText = ''
 ): Promise<ActiveBorrowing[]> {
-
-  const { data, error } =
-    await supabase.rpc(
-      'admin_search_active_borrowings',
-      {
-        p_search_text:
-          searchText.trim(),
-      }
-    );
-
-
-  if (error) {
-    throw error;
-  }
-
-
-  const rows = data ?? [];
-
-
-  return Promise.all(
-    rows.map(
-      async (
-        borrowing: ActiveBorrowing
-      ) => {
-
-        let coverUrl:
-          string | null = null;
-
-
-        if (borrowing.cover_path) {
-
-          const {
-            data: signedData,
-            error: signedError,
-          } = await supabase.storage
-            .from('book-covers')
-            .createSignedUrl(
-              borrowing.cover_path,
-              3600
-            );
-
-
-          if (
-            !signedError &&
-            signedData
-          ) {
-            coverUrl =
-              signedData.signedUrl;
-          }
-
-        }
-
-
-        return {
-          ...borrowing,
-          cover_url: coverUrl,
-        };
-
-      }
-    )
-  );
-
+  const rows = await listLocalActiveBorrowings(searchText);
+  return rows.map(mapBorrowing);
 }
 
-
-export async function receiveBook(
-  borrowingId: string
-) {
-
-  const { error } =
-    await supabase.rpc(
-      'admin_receive_book',
-      {
-        p_borrowing_id:
-          borrowingId,
-      }
-    );
-
-
-  if (error) {
-    throw error;
-  }
-
+export async function receiveBook(borrowingId: string): Promise<void> {
+  const access = await getUserAccess();
+  await returnLocalBorrowing(borrowingId, access?.id ?? null);
 }
+
 export type BorrowingHistoryItem = {
   borrowing_id: string;
-
   book_id: string;
   serial_number: string;
   title: string;
@@ -147,96 +79,49 @@ export type BorrowingHistoryItem = {
   publisher: string | null;
   cover_path: string | null;
   cover_url?: string | null;
-
   subscriber_id: string;
   subscriber_name: string | null;
-  subscriber_email: string | null;
-
+  subscriber_username: string | null;
   issued_at: string;
   due_date: string | null;
   returned_at: string | null;
-
   issued_by: string | null;
   issued_by_name: string | null;
-
   received_by: string | null;
   received_by_name: string | null;
-
   notes: string | null;
-
-  status:
-    | 'issued'
-    | 'returned'
-    | 'overdue';
+  status: 'issued' | 'returned' | 'overdue';
 };
 
-
 export async function searchBorrowingHistory(
-  searchText: string = '',
-  status: string = 'all'
+  searchText = '',
+  status = 'all'
 ): Promise<BorrowingHistoryItem[]> {
-
-  const { data, error } =
-    await supabase.rpc(
-      'admin_search_borrowing_history',
-      {
-        p_search_text:
-          searchText.trim(),
-
-        p_status:
-          status,
-      }
-    );
-
-
-  if (error) {
-    throw error;
-  }
-
-
-  const rows =
-    (data ?? []) as BorrowingHistoryItem[];
-
-
-  return Promise.all(
-    rows.map(
-      async (item) => {
-
-        let coverUrl:
-          string | null = null;
-
-
-        if (item.cover_path) {
-
-          const {
-            data: signedData,
-            error: signedError,
-          } = await supabase.storage
-            .from('book-covers')
-            .createSignedUrl(
-              item.cover_path,
-              3600
-            );
-
-
-          if (
-            !signedError &&
-            signedData
-          ) {
-            coverUrl =
-              signedData.signedUrl;
-          }
-
-        }
-
-
-        return {
-          ...item,
-          cover_url: coverUrl,
-        };
-
-      }
-    )
-  );
-
+  const rows = await listLocalBorrowingHistory(searchText, status);
+  return rows.map((row) => ({
+    borrowing_id: row.id,
+    book_id: row.book_id,
+    serial_number: row.serial_number ?? '',
+    title: row.title ?? '',
+    author: row.author ?? '',
+    publisher: row.publisher,
+    cover_path: row.cover_path,
+    cover_url: null,
+    subscriber_id: row.subscriber_id,
+    subscriber_name: row.subscriber_name,
+    subscriber_username: row.subscriber_username,
+    issued_at: row.issued_at,
+    due_date: row.due_date,
+    returned_at: row.returned_at,
+    issued_by: row.issued_by,
+    issued_by_name: row.issued_by_name,
+    received_by: row.received_by,
+    received_by_name: row.received_by_name,
+    notes: row.notes,
+    status: row.returned_at
+      ? 'returned'
+      : row.due_date && Date.parse(`${row.due_date}T23:59:59`) < Date.now()
+        ? 'overdue'
+        : 'issued',
+  }));
 }

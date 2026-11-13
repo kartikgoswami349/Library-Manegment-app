@@ -162,7 +162,7 @@ export default function ReceiveBookScreen() {
     Alert.alert(
       'Receive Book',
 
-      `Confirm return of #${selectedBorrowing.serial_number} "${selectedBorrowing.title}" from ${selectedBorrowing.subscriber_name || selectedBorrowing.subscriber_email}?`,
+      `Confirm return of #${selectedBorrowing.serial_number} "${selectedBorrowing.title}" from ${selectedBorrowing.subscriber_name || selectedBorrowing.subscriber_username}?`,
 
       [
         {
@@ -601,7 +601,7 @@ export default function ReceiveBookScreen() {
                           numberOfLines={1}
                         >
                           {item.subscriber_name ||
-                            item.subscriber_email}
+                            `@${item.subscriber_username}`}
                         </Text>
 
                       </View>
@@ -918,7 +918,7 @@ export default function ReceiveBookScreen() {
                     styles.infoSecondary
                   }
                 >
-                  {selectedBorrowing.subscriber_email}
+                  @{selectedBorrowing.subscriber_username}
                 </Text>
 
               </View>

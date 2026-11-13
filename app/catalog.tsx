@@ -5,11 +5,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-    EmptyState,
-    ErrorState
-} from '../components/ScreenState';
-
-import {
     ActivityIndicator,
     FlatList,
     Image,
@@ -44,69 +39,7 @@ const PAGE_SIZE = 30;
 export default function CatalogScreen() {
 
   const [loading, setLoading] = useState(true);
-const [error, setError] = useState('');
-async function loadCatalog() {
-
-  try {
-
-    setLoading(true);
-    setError('');
-
-    const result = await getCatalogBooks();
-
-setBooks(result.books);
-setTotal(result.total);
-
-  } catch (error) {
-
-    console.log(
-      'Catalog load error:',
-      error
-    );
-
-    setError(
-      'Unable to load the library catalog.'
-    );
-
-  } finally {
-
-    setLoading(false);
-
-  }
-
-  {!loading && error ? (
-
-  <ErrorState
-    title="Unable to load books"
-    message={error}
-    onRetry={loadCatalog}
-  />
-
-) : null}
-
-{!loading &&
- !error &&
- books.length === 0 ? (
-
-  <EmptyState
-    icon="book-outline"
-    title="No books found"
-    message="There are no books available in the catalog yet."
-  />
-
-) : null}
-
-{!loading &&
- !error &&
- books.length > 0 && (
-
-  <>
-    {/* your existing book list */}
-  </>
-
-)}
-
-}
+  const [error, setError] = useState('');
 
   const [books, setBooks] =
     useState<LibraryBook[]>([]);
@@ -132,6 +65,7 @@ setTotal(result.total);
   ) {
 
     try {
+      setError('');
 
       if (isRefresh) {
         setRefreshing(true);
@@ -153,6 +87,11 @@ setTotal(result.total);
       console.log(
         'Catalog load error:',
         error
+      );
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load the library catalog.'
       );
 
     } finally {
@@ -436,6 +375,25 @@ setTotal(result.total);
 
     );
 
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.loadingScreen}>
+        <Ionicons
+          name="alert-circle-outline"
+          size={46}
+          color={Colors.primary}
+        />
+        <Text style={styles.loadingText}>{error}</Text>
+        <Pressable
+          onPress={() => loadInitialBooks(true)}
+          style={styles.retryButton}
+        >
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
   }
 
 
@@ -1073,6 +1031,20 @@ headerActionButton: {
     marginTop: 10,
 
     fontSize: 12,
+  },
+
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+  },
+
+  retryButtonText: {
+    color: Colors.surface,
+    fontSize: 13,
+    fontWeight: '700',
   },
 
 });

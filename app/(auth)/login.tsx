@@ -18,98 +18,40 @@ import {
 import { router } from 'expo-router';
 
 import { AppTheme, Colors } from '../../constants/theme';
-import { supabase } from '../../lib/supabase';
+import { signInLocal } from '../../lib/local-auth';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleLogin() {
-    if (!email.trim() || !password) {
+    if (!username.trim() || !password) {
       Alert.alert(
         'Missing information',
-        'Please enter your email and password.'
+        'Please enter your username and password.'
       );
       return;
     }
 
     try {
       setLoading(true);
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
 
-      const { data, error } =
-        await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-
-      if (error) {
-        Alert.alert('Login failed', error.message);
-        return;
-      }
-
-      if (!data.user) {
-        Alert.alert(
-          'Login failed',
-          'User account could not be found.'
-        );
-        return;
-      }
-
-      const { data: profile, error: profileError } =
-        await supabase
-          .from('profiles')
-          .select(
-            'id, full_name, role, subscription_start, subscription_expiry, is_enabled'
-          )
-          .eq('id', data.user.id)
-          .single();
-
-      if (profileError || !profile) {
-        await supabase.auth.signOut();
-
-        Alert.alert(
-          'Profile error',
-          'Your library profile could not be found.'
-        );
-        return;
-      }
-
-      if (!profile.is_enabled) {
-        await supabase.auth.signOut();
-
-        Alert.alert(
-          'Account disabled',
-          'Please contact the library administrator.'
-        );
-        return;
-      }
-
-      // Subscription dates DO NOT block access.
-
-      if (profile.role === 'admin') {
+      const account = await signInLocal(username, password);
+      if (account.role === 'admin') {
         router.replace('/(admin)');
         return;
       }
 
-      if (profile.role === 'subscriber') {
-        router.replace('/(user)');
-        return;
-      }
-
-      await supabase.auth.signOut();
-
-      Alert.alert(
-        'Access denied',
-        'This account does not have a valid role.'
-      );
+      router.replace('/(user)');
     } catch (error) {
-      console.log(error);
-
       Alert.alert(
         'Error',
-        'Something went wrong. Please try again.'
+        error instanceof Error ? error.message : 'Unable to sign in.'
       );
     } finally {
       setLoading(false);
@@ -158,15 +100,14 @@ export default function LoginScreen() {
 
             <View style={styles.field}>
               <Text style={styles.label}>
-                Email Address
+                Username
               </Text>
 
               <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Enter your username"
                 placeholderTextColor={Colors.textSecondary}
-                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={styles.input}
@@ -203,21 +144,6 @@ export default function LoginScreen() {
             </View>
 
             <Pressable
-  onPress={() =>
-    router.push(
-      '/(auth)/forgot-password'
-    )
-  }
-  style={styles.forgotButton}
->
-
-  <Text style={styles.forgotText}>
-    Forgot Password?
-  </Text>
-
-</Pressable>
-
-            <Pressable
               onPress={handleLogin}
               disabled={loading}
               style={({ pressed }) => [
@@ -227,9 +153,10 @@ export default function LoginScreen() {
               ]}
             >
               {loading ? (
-                <ActivityIndicator
-                  color={Colors.surface}
-                />
+                <View style={styles.loadingContent}>
+                  <ActivityIndicator color={Colors.surface} />
+                  <Text style={styles.loginText}>Checking account…</Text>
+                </View>
               ) : (
                 <Text style={styles.loginText}>
                   Sign In
@@ -242,7 +169,7 @@ export default function LoginScreen() {
             <View style={styles.signupRow}>
 
            <Text style={styles.signupQuestion}>
-           Don't have an account?
+           Don&apos;t have an account?
             </Text>
 
            <Pressable
@@ -478,6 +405,12 @@ signupLink: {
     opacity: 0.7,
   },
 
+  loadingContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+
   loginText: {
     color: Colors.surface,
     fontSize: 16,
@@ -490,18 +423,6 @@ signupLink: {
     backgroundColor: Colors.border,
     marginVertical: 22,
   },
-
-  forgotButton: {
-  alignSelf: 'flex-end',
-  marginTop: 8,
-  marginBottom: 5,
-},
-
-forgotText: {
-  color: Colors.primaryDark,
-  fontSize: 11,
-  fontWeight: '700',
-},
 
   
 

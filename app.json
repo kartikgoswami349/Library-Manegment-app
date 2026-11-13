@@ -8,15 +8,26 @@
     "scheme": "libraryapp",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Allow Library to sync offline book and borrowing changes with other devices on your local Wi-Fi network.",
+        "NSBonjourServices": [
+          "_r58inventory._tcp"
+        ]
+      }
     },
     "android": {
-  "package": "com.ssda.libraryapp",
-
-  "adaptiveIcon": {
-    "foregroundImage": "./assets/images/android-icon-foreground.png",
-    "backgroundColor": "#FFF7FA"
-  },
+      "package": "com.ssda.libraryapp",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundColor": "#FFF7FA"
+      },
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -35,7 +46,8 @@
         }
       ],
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

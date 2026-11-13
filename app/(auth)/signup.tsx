@@ -20,9 +20,7 @@ import {
     router,
 } from 'expo-router';
 
-import {
-    supabase,
-} from '../../lib/supabase';
+import { createLocalAccount, signInLocal } from '../../lib/local-auth';
 
 import {
     Colors,
@@ -34,7 +32,7 @@ export default function SignupScreen() {
   const [fullName, setFullName] =
     useState('');
 
-  const [email, setEmail] =
+  const [username, setUsername] =
     useState('');
     const [mobileNumber, setMobileNumber] =
   useState('');
@@ -53,34 +51,6 @@ export default function SignupScreen() {
 
 
   async function createAccount() {
-
-    if (
-      !mobileNumber.trim() ||
-      !fullName.trim() ||
-  !email.trim() ||
-  !password
-) {
-
-  Alert.alert(
-    'Missing Information',
-    'Please enter your name, mobile number, email and password.'
-  );
-
-  return;
-}
-
-
-    if (password.length < 6) {
-
-      Alert.alert(
-        'Password Too Short',
-        'Password must contain at least 6 characters.'
-      );
-
-      return;
-    }
-
-
     if (password !== confirmPassword) {
 
       Alert.alert(
@@ -97,70 +67,14 @@ export default function SignupScreen() {
       setLoading(true);
 
 
-      const {
-        data,
-        error,
-      } = await supabase.auth.signUp({
-
-        email:
-          email.trim().toLowerCase(),
-
+      await createLocalAccount(
+        username,
         password,
-
-        options: {
-
-  data: {
-    full_name:
-      fullName.trim(),
-
-    mobile_number:
-      mobileNumber.trim(),
-  },
-
-},
-
-      });
-
-
-      if (error) {
-        throw error;
-      }
-
-
-      /*
-       * Email confirmation disabled:
-       * Supabase normally returns a session
-       * immediately.
-       */
-
-      if (data.session) {
-
-        router.replace(
-          '/(user)'
-        );
-
-        return;
-      }
-
-
-      /*
-       * Email confirmation enabled:
-       */
-
-      Alert.alert(
-        'Account Created',
-        'Please check your email and confirm your account before signing in.',
-        [
-          {
-            text: 'OK',
-
-            onPress: () =>
-              router.replace(
-                '/(auth)/login'
-              ),
-          },
-        ]
+        fullName,
+        mobileNumber
       );
+      await signInLocal(username, password);
+      router.replace('/(user)');
 
 
     } catch (error: any) {
@@ -264,6 +178,14 @@ export default function SignupScreen() {
 
           <View style={styles.formCard}>
 
+            <InputField
+              label="Username"
+              placeholder="Choose a username"
+              value={username}
+              onChangeText={setUsername}
+              icon="person-outline"
+              autoCapitalize="none"
+            />
 
             <InputField
               label="Full Name"
@@ -283,19 +205,6 @@ export default function SignupScreen() {
   icon="call-outline"
   keyboardType="phone-pad"
 />
-
-
-            <InputField
-              label="Email Address"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={
-                setEmail
-              }
-              icon="mail-outline"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
 
 
             <Text style={styles.label}>
@@ -489,7 +398,6 @@ function InputField({
 
   keyboardType?:
   | 'default'
-  | 'email-address'
   | 'phone-pad';
 
   autoCapitalize?:

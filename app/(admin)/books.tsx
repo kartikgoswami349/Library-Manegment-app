@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -15,10 +15,11 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import {
     AdminBook,
+    SearchMode,
     searchAdminBooks,
     setBookActiveStatus,
 } from '../../services/books';
@@ -27,11 +28,21 @@ import {
     Colors
 } from '../../constants/theme';
 
+const SEARCH_OPTIONS: { label: string; value: SearchMode }[] = [
+    { label: 'Title', value: 'title' },
+    { label: 'Author', value: 'author' },
+    { label: 'Publisher', value: 'publisher' },
+    { label: 'Serial No.', value: 'serial' },
+    { label: 'Category', value: 'category' },
+];
+
 
 export default function BooksManagementScreen() {
 
   const [searchText, setSearchText] =
     useState('');
+  const [searchMode, setSearchMode] =
+    useState<SearchMode>('title');
 
   const [books, setBooks] =
     useState<AdminBook[]>([]);
@@ -43,15 +54,10 @@ export default function BooksManagementScreen() {
     useState(false);
 
 
-  useEffect(() => {
-    loadBooks();
-  }, []);
-
-
-  async function loadBooks(
+  const loadBooks = useCallback(async (
     text: string = searchText,
     refresh: boolean = false
-  ) {
+  ) => {
 
     try {
 
@@ -62,7 +68,7 @@ export default function BooksManagementScreen() {
       }
 
       const result =
-        await searchAdminBooks(text);
+        await searchAdminBooks(text, searchMode);
 
       setBooks(result);
 
@@ -86,8 +92,13 @@ export default function BooksManagementScreen() {
 
     }
 
-  }
+  }, [searchMode, searchText]);
 
+    useFocusEffect(
+      useCallback(() => {
+        void loadBooks();
+      }, [loadBooks])
+    );
 
   function openEditBook(
     book: AdminBook
@@ -196,6 +207,21 @@ export default function BooksManagementScreen() {
 
   }
 
+  function getPlaceholder() {
+    switch (searchMode) {
+      case 'author':
+        return 'Search by author...';
+      case 'publisher':
+        return 'Search by publisher...';
+      case 'serial':
+        return 'Search serial number...';
+      case 'category':
+        return 'Search by category...';
+      default:
+        return 'Search by book title...';
+    }
+  }
+
 
   function renderBook({
     item,
@@ -205,16 +231,12 @@ export default function BooksManagementScreen() {
 
     return (
 
-      <Pressable
-  onPress={() => openBookDetails(item)}
-  style={({ pressed }) => [
+      <View
+  style={[
     styles.bookCard,
 
     !item.is_active &&
       styles.inactiveCard,
-
-    pressed &&
-      styles.bookCardPressed,
   ]}
 >
 
@@ -439,8 +461,24 @@ export default function BooksManagementScreen() {
           <View style={styles.actions}>
 
             <Pressable
-              onPress={(event) => {
-             event.stopPropagation();
+              accessibilityRole="button"
+              onPress={() => openBookDetails(item)}
+              style={({ pressed }) => [
+                styles.detailsButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="eye-outline"
+                size={15}
+                color={Colors.primaryDark}
+              />
+              <Text style={styles.detailsButtonText}>View Details</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
               openEditBook(item);
               }}
               style={({ pressed }) => [
@@ -469,8 +507,8 @@ export default function BooksManagementScreen() {
 
 
             <Pressable
-              onPress={(event) => {
-              event.stopPropagation();
+              accessibilityRole="button"
+              onPress={() => {
               changeBookStatus(item);
               }}
               style={({ pressed }) => [
@@ -525,7 +563,7 @@ export default function BooksManagementScreen() {
 
         </View>
 
-      </Pressable>
+      </View>
 
     );
 
@@ -614,7 +652,7 @@ export default function BooksManagementScreen() {
               onChangeText={
                 setSearchText
               }
-              placeholder="Title, writer, publisher, serial..."
+              placeholder={getPlaceholder()}
               placeholderTextColor={
                 Colors.textSecondary
               }
@@ -667,6 +705,23 @@ export default function BooksManagementScreen() {
 
           </Pressable>
 
+        </View>
+
+        <View style={styles.filters}>
+          {SEARCH_OPTIONS.map((option) => {
+            const active = searchMode === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => setSearchMode(option.value)}
+                style={[styles.filter, active && styles.activeFilter]}
+              >
+                <Text style={[styles.filterText, active && styles.activeFilterText]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
 
@@ -970,6 +1025,38 @@ const styles = StyleSheet.create({
 
     backgroundColor:
       Colors.primary,
+  },
+
+  filters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+
+  filter: {
+    borderColor: Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: Colors.surface,
+  },
+
+  activeFilter: {
+    backgroundColor: Colors.softAccent,
+    borderColor: Colors.primary,
+  },
+
+  filterText: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  activeFilterText: {
+    color: Colors.primaryDark,
   },
 
 
@@ -1310,12 +1397,30 @@ const styles = StyleSheet.create({
 
   actions: {
     flexDirection: 'row',
-
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 7,
-
     marginTop: 9,
   },
 
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+
+  detailsButtonText: {
+    color: Colors.primaryDark,
+    fontSize: 10,
+    fontWeight: '800',
+  },
 
   editButton: {
     flexDirection: 'row',

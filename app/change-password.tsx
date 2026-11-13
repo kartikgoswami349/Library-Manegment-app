@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '../constants/theme';
-import { supabase } from '../lib/supabase';
+import { changeLocalPassword } from '../lib/local-auth';
 
 
 export default function ChangePasswordScreen() {
@@ -90,69 +90,7 @@ export default function ChangePasswordScreen() {
     try {
 
       setSaving(true);
-
-
-      /*
-        Get logged-in user's email
-      */
-
-      const {
-        data: { user },
-        error: userError,
-      } =
-        await supabase.auth.getUser();
-
-
-      if (
-        userError ||
-        !user ||
-        !user.email
-      ) {
-        throw new Error(
-          'Unable to verify your account.'
-        );
-      }
-
-
-      /*
-        Verify current password
-      */
-
-      const {
-        error: loginError,
-      } =
-        await supabase.auth.signInWithPassword({
-          email: user.email,
-          password: currentPassword,
-        });
-
-
-      if (loginError) {
-
-        Alert.alert(
-          'Incorrect Password',
-          'Your current password is incorrect.'
-        );
-
-        return;
-      }
-
-
-      /*
-        Change password
-      */
-
-      const {
-        error: updateError,
-      } =
-        await supabase.auth.updateUser({
-          password: newPassword,
-        });
-
-
-      if (updateError) {
-        throw updateError;
-      }
+      await changeLocalPassword(currentPassword, newPassword);
 
 
       Alert.alert(
@@ -168,12 +106,13 @@ export default function ChangePasswordScreen() {
       );
 
 
-    } catch (error: any) {
+    } catch (error: unknown) {
 
       Alert.alert(
         'Password Change Failed',
-        error?.message ??
-          'Unable to change your password.'
+        error instanceof Error
+          ? error.message
+          : 'Unable to change your password.'
       );
 
     } finally {

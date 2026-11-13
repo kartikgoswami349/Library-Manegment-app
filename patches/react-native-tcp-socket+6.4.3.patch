@@ -1,0 +1,98 @@
+diff --git a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+index 121edb4..89750be 100644
+--- a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
++++ b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+@@ -128,7 +128,8 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void write(final int cId, @NonNull final String base64String, final int msgId) {
+-        TcpSocketClient socketClient = getTcpClient(cId);
++        TcpSocketClient socketClient = getTcpClientOrReport(cId);
++        if (socketClient == null) return;
+         byte[] data = Base64.decode(base64String, Base64.NO_WRAP);
+         socketClient.write(msgId, data);
+     }
+@@ -140,8 +141,12 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         executorService.execute(new Runnable() {
+             @Override
+             public void run() {
+-                TcpSocketClient socketClient = getTcpClient(cId);
+-                socketClient.destroy();
++                TcpSocket socket = socketMap.get(cId);
++                if (socket instanceof TcpSocketClient) {
++                    TcpSocketClient socketClient = (TcpSocketClient) socket;
++                    socketClient.destroy();
++                    socketMap.remove(cId, socketClient);
++                }
+             }
+         });
+     }
+@@ -158,9 +163,11 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         executorService.execute(new Runnable() {
+             @Override
+             public void run() {
+-                TcpSocketServer socketServer = getTcpServer(cId);
++                TcpSocket socket = socketMap.get(cId);
++                if (!(socket instanceof TcpSocketServer)) return;
++                TcpSocketServer socketServer = (TcpSocketServer) socket;
+                 socketServer.close();
+-                socketMap.remove(cId);
++                socketMap.remove(cId, socketServer);
+             }
+         });
+     }
+@@ -186,7 +193,8 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void setNoDelay(@NonNull final Integer cId, final boolean noDelay) {
+-        final TcpSocketClient client = getTcpClient(cId);
++        final TcpSocketClient client = getTcpClientOrReport(cId);
++        if (client == null) return;
+         try {
+             client.setNoDelay(noDelay);
+         } catch (IOException e) {
+@@ -197,7 +205,8 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void setKeepAlive(@NonNull final Integer cId, final boolean enable, final int initialDelay) {
+-        final TcpSocketClient client = getTcpClient(cId);
++        final TcpSocketClient client = getTcpClientOrReport(cId);
++        if (client == null) return;
+         try {
+             client.setKeepAlive(enable, initialDelay);
+         } catch (IOException e) {
+@@ -208,14 +217,16 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void pause(final int cId) {
+-        TcpSocketClient client = getTcpClient(cId);
++        TcpSocketClient client = getTcpClientOrReport(cId);
++        if (client == null) return;
+         client.pause();
+     }
+ 
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void resume(final int cId) {
+-        TcpSocketClient client = getTcpClient(cId);
++        TcpSocketClient client = getTcpClientOrReport(cId);
++        if (client == null) return;
+         client.resume();
+     }
+ 
+@@ -461,6 +472,15 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         return (TcpSocketClient) socket;
+     }
+ 
++    private TcpSocketClient getTcpClientOrReport(final int id) {
++        try {
++            return getTcpClient(id);
++        } catch (IllegalArgumentException e) {
++            tcpEvtListener.onError(id, e);
++            return null;
++        }
++    }
++
+     private TcpSocketServer getTcpServer(final int id) {
+         TcpSocket socket = socketMap.get(id);
+         if (socket == null) {

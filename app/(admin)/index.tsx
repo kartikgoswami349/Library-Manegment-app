@@ -15,6 +15,7 @@ import {
     Alert,
     Image,
     Pressable,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -28,31 +29,23 @@ import {
 } from 'expo-router';
 
 import { Colors } from '../../constants/theme';
-import { supabase } from '../../lib/supabase';
+import { getMyProfile } from '../../services/account';
+import { signOutLocal } from '../../lib/local-auth';
+import { RefreshStatusBar } from '../../components/RefreshStatusBar';
 
 
 export default function AdminDashboard() {
+  const isDesktop = Platform.OS === 'web';
 
   const [recentActivity, setRecentActivity] =
   useState<RecentActivity[]>([]);
 
   useFocusEffect(
-  useCallback(() => {
-
-    loadStats();
-    loadRecentActivity();
-
-  }, [])
-);
-
-useFocusEffect(
-  useCallback(() => {
-
-    loadStats();
-    loadRecentActivity();
-
-  }, [])
-);
+    useCallback(() => {
+      loadStats();
+      loadRecentActivity();
+    }, [])
+  );
 
 
 async function loadRecentActivity() {
@@ -88,19 +81,9 @@ async function loadRecentActivity() {
     total_admins: 0,
   });
 
-const [statsLoading, setStatsLoading] =
-  useState(true);
-
-  useEffect(() => {
-  loadStats();
-}, []);
-
-
 async function loadStats() {
 
   try {
-
-    setStatsLoading(true);
 
     const result =
       await getDashboardStats();
@@ -114,16 +97,36 @@ async function loadStats() {
       error
     );
 
-  } finally {
-
-    setStatsLoading(false);
-
   }
 
 }
 
+function openDashboardMetric(label: string) {
+  switch (label) {
+    case 'Total Books':
+    case 'Available':
+      router.push('/(admin)/books');
+      break;
+    case 'Issued':
+    case 'Overdue': {
+      const filter = label.toLowerCase();
+      router.push(`/(admin)/borrowings?filter=${filter}`);
+      break;
+    }
+    case 'Titles':
+      router.push('/catalog');
+      break;
+    case 'Subscribers':
+      router.push('/(admin)/subscribers');
+      break;
+  }
+}
+
   const [adminName, setAdminName] =
     useState('Admin');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState(false);
 
 
   useEffect(() => {
@@ -135,22 +138,9 @@ async function loadStats() {
 
     try {
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        return;
-      }
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-
-      if (data?.full_name) {
-        setAdminName(data.full_name);
+      const profile = await getMyProfile();
+      if (profile?.full_name || profile?.username) {
+        setAdminName(profile.full_name || profile.username);
       }
 
     } catch (error) {
@@ -162,6 +152,24 @@ async function loadStats() {
 
     }
 
+  }
+
+  async function refreshDashboard() {
+    if (refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    setRefreshMessage(null);
+    setRefreshError(false);
+    try {
+      await Promise.all([loadStats(), loadRecentActivity(), loadAdmin()]);
+      setRefreshMessage('Dashboard data refreshed.');
+    } catch (error) {
+      setRefreshMessage(error instanceof Error ? error.message : 'Unable to refresh dashboard.');
+      setRefreshError(true);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
 
@@ -181,7 +189,7 @@ async function loadStats() {
 
           onPress: async () => {
 
-            await supabase.auth.signOut();
+            await signOutLocal();
 
             router.replace(
               '/(auth)/login'
@@ -197,7 +205,7 @@ async function loadStats() {
 
   return (
 
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -234,6 +242,14 @@ async function loadStats() {
 
           </View>
 
+          {isDesktop && (
+            <RefreshStatusBar
+              onRefresh={() => void refreshDashboard()}
+              refreshing={refreshing}
+              message={refreshMessage}
+              error={refreshError}
+            />
+          )}
 
           <Pressable
             onPress={logout}
@@ -258,24 +274,50 @@ async function loadStats() {
 
         {/* WELCOME */}
 
-        <View style={styles.welcomeSection}>
+        <View
+          style={[
+            styles.welcomeCard,
+            !isDesktop && styles.mobileWelcomeCard,
+          ]}
+        >
+            <View style={styles.welcomeContent}>
+              <Text style={styles.welcomeLabel}>
+                Welcome back,
+              </Text>
+              <Text
+                style={[
+                  styles.adminName,
+                  !isDesktop && styles.mobileAdminName,
+                ]}
+                numberOfLines={1}
+              >
+                {adminName} 👋
+              </Text>
+              <Text
+                style={[
+                  styles.welcomeDescription,
+                  !isDesktop && styles.mobileWelcomeDescription,
+                ]}
+              >
+                Manage books, subscribers and library activity from one place.
+              </Text>
+            </View>
 
-          <Text style={styles.welcomeLabel}>
-            Welcome back,
-          </Text>
-
-          <Text
-            style={styles.adminName}
-            numberOfLines={1}
-          >
-            {adminName}
-          </Text>
-
-          <Text style={styles.welcomeDescription}>
-            Manage books, subscribers and
-            library activity from one place.
-          </Text>
-
+            <View
+              style={[
+                styles.templeArea,
+                !isDesktop && styles.mobileTempleArea,
+              ]}
+            >
+              <Image
+                source={require('../../assets/images/welcome-temple.png')}
+                style={[
+                  styles.templeImage,
+                  !isDesktop && styles.mobileTempleImage,
+                ]}
+                resizeMode="contain"
+              />
+            </View>
         </View>
 
         {/* LIBRARY OVERVIEW */}
@@ -284,85 +326,98 @@ async function loadStats() {
   Ashram Library Overview
 </Text>
 
-<View style={styles.statsRow}>
-
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>
-      {stats.total_books}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Total Books
-    </Text>
+{isDesktop ? (
+  <View style={styles.statsGrid}>
+    <DashboardMetric icon="library-outline" value={stats.total_books} label="Total Books" onPress={openDashboardMetric} />
+    <DashboardMetric icon="bookmark-outline" value={stats.available_books} label="Available" onPress={openDashboardMetric} />
+    <DashboardMetric icon="time-outline" value={stats.issued_books} label="Issued" onPress={openDashboardMetric} />
+    <DashboardMetric icon="book-outline" value={stats.catalog_titles} label="Titles" onPress={openDashboardMetric} />
+    <DashboardMetric icon="people-outline" value={stats.total_subscribers} label="Subscribers" onPress={openDashboardMetric} />
+    <DashboardMetric
+      icon="warning-outline"
+      value={stats.overdue_books}
+      label="Overdue"
+      danger={stats.overdue_books > 0}
+      onPress={openDashboardMetric}
+    />
   </View>
-
-
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>
-      {stats.available_books}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Available
-    </Text>
-  </View>
-
-
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>
-      {stats.issued_books}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Issued
-    </Text>
-  </View>
-
-</View>
-
-
-<View style={styles.statsRow}>
-
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>
-      {stats.catalog_titles}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Titles
-    </Text>
-  </View>
-
-
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>
-      {stats.total_subscribers}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Subscribers
-    </Text>
-  </View>
-
-
-  <View style={styles.statBox}>
-    <Text
-      style={[
-        styles.statValue,
-        stats.overdue_books > 0 && {
-          color: Colors.danger,
-        },
-      ]}
-    >
-      {stats.overdue_books}
-    </Text>
-
-    <Text style={styles.statLabel}>
-      Overdue
-    </Text>
-  </View>
-
-</View>
+) : (
+  <>
+    <View style={styles.statsRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Total Books: ${stats.total_books}`}
+        accessibilityHint="Opens book management"
+        onPress={() => openDashboardMetric('Total Books')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text style={styles.statValue}>{stats.total_books}</Text>
+        <Text style={styles.statLabel} numberOfLines={2}>
+          Total Books
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Available: ${stats.available_books}`}
+        accessibilityHint="Opens book management"
+        onPress={() => openDashboardMetric('Available')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text style={styles.statValue}>{stats.available_books}</Text>
+        <Text style={styles.statLabel}>Available</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Issued: ${stats.issued_books}`}
+        accessibilityHint="Opens borrowing history"
+        onPress={() => openDashboardMetric('Issued')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text style={styles.statValue}>{stats.issued_books}</Text>
+        <Text style={styles.statLabel}>Issued</Text>
+      </Pressable>
+    </View>
+    <View style={styles.statsRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Titles: ${stats.catalog_titles}`}
+        accessibilityHint="Opens the library catalog"
+        onPress={() => openDashboardMetric('Titles')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text style={styles.statValue}>{stats.catalog_titles}</Text>
+        <Text style={styles.statLabel}>Titles</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Subscribers: ${stats.total_subscribers}`}
+        accessibilityHint="Opens subscriber management"
+        onPress={() => openDashboardMetric('Subscribers')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text style={styles.statValue}>{stats.total_subscribers}</Text>
+        <Text style={styles.statLabel}>Subscribers</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Overdue: ${stats.overdue_books}`}
+        accessibilityHint="Opens borrowing history"
+        onPress={() => openDashboardMetric('Overdue')}
+        style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+      >
+        <Text
+          style={[
+            styles.statValue,
+            stats.overdue_books > 0 && { color: Colors.danger },
+          ]}
+        >
+          {stats.overdue_books}
+        </Text>
+        <Text style={styles.statLabel}>Overdue</Text>
+      </Pressable>
+    </View>
+  </>
+)}
 
 
 
@@ -406,7 +461,8 @@ async function loadStats() {
           <Ionicons
             name="chevron-forward"
             size={21}
-            color={Colors.primary}
+            color={isDesktop ? Colors.surface : Colors.primary}
+            style={isDesktop ? styles.catalogArrow : undefined}
           />
 
         </Pressable>
@@ -687,6 +743,49 @@ async function loadStats() {
           Digital Library Management System
         </Text>
 
+        {isDesktop ? (
+          <>
+            <Text style={styles.sectionTitle}>
+              Device Sync
+            </Text>
+            <View style={styles.row}>
+              <DashboardCard
+                icon="sync-outline"
+                title="LAN Sync"
+                subtitle="Sync offline changes"
+                onPress={() => router.push('/(admin)/sync')}
+              />
+            </View>
+          </>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(admin)/sync')}
+            style={({ pressed }) => [
+              styles.mobileSyncShortcut,
+              pressed && styles.cardPressed,
+            ]}
+          >
+            <View style={styles.mobileSyncIcon}>
+              <Ionicons
+                name="sync-outline"
+                size={24}
+                color={Colors.primaryDark}
+              />
+            </View>
+            <View style={styles.mobileSyncText}>
+              <Text style={styles.mobileSyncTitle}>LAN Sync</Text>
+              <Text style={styles.mobileSyncSubtitle}>
+                Sync this library with nearby devices
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={Colors.primaryDark}
+            />
+          </Pressable>
+        )}
 
       </ScrollView>
 
@@ -765,48 +864,108 @@ function DashboardCard({
 
 }
 
+function DashboardMetric({
+  icon,
+  value,
+  label,
+  danger = false,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: number;
+  label: string;
+  danger?: boolean;
+  onPress: (label: string) => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint={`Opens ${label === 'Titles' ? 'the library catalog' : label === 'Subscribers' ? 'subscriber management' : label === 'Issued' || label === 'Overdue' ? 'borrowing history' : 'book management'}`}
+      onPress={() => onPress(label)}
+      style={({ pressed }) => [styles.statBox, pressed && styles.cardPressed]}
+    >
+      <View style={styles.statIcon}>
+        <Ionicons name={icon} size={23} color={danger ? Colors.danger : Colors.primaryDark} />
+      </View>
+      <View style={styles.statText}>
+        <Text style={[styles.statValue, danger && styles.dangerValue]}>{value}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+      <Ionicons
+        name="ellipsis-vertical"
+        size={18}
+        color={Colors.secondary}
+        style={styles.statDots}
+      />
+    </Pressable>
+  );
+}
 
 
 const styles = StyleSheet.create({
 
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+
   statsRow: {
-  flexDirection: 'row',
-  gap: 8,
-  marginBottom: 8,
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  statBox: {
+    flex: 1,
+    minHeight: 67,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 15,
+    paddingVertical: 9,
+  },
+
+statIcon: {
+  alignItems: 'center',
+  backgroundColor: '#FFE6EF',
+  borderRadius: 25,
+  height: 50,
+  justifyContent: 'center',
+  width: 50,
 },
 
-statBox: {
+statText: {
   flex: 1,
-
-  minHeight: 67,
-
-  alignItems: 'center',
-  justifyContent: 'center',
-
-  backgroundColor: Colors.surface,
-
-  borderWidth: 1,
-  borderColor: Colors.border,
-
-  borderRadius: 15,
-
-  paddingVertical: 9,
+  marginLeft: 12,
 },
 
 statValue: {
   color: Colors.primaryDark,
-
-  fontSize: 20,
+  fontSize: 21,
   fontWeight: '800',
+},
+
+dangerValue: {
+  color: Colors.danger,
 },
 
 statLabel: {
   color: Colors.textSecondary,
-
-  fontSize: 8,
+  fontSize: 11,
   fontWeight: '700',
-
   marginTop: 3,
+},
+
+statDots: {
+  color: Colors.secondary,
+  position: 'absolute',
+  right: 9,
+  top: 8,
 },
 
   safeArea: {
@@ -900,6 +1059,43 @@ statLabel: {
     marginBottom: 19,
   },
 
+  welcomeCard: {
+    minHeight: 96,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: Colors.roseMist,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 18,
+    overflow: 'hidden',
+  },
+
+  mobileWelcomeCard: {
+    minHeight: 96,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: Colors.roseMist,
+    borderColor: Colors.border,
+  },
+
+  mobileAdminName: {
+    fontSize: 20,
+  },
+
+  mobileWelcomeDescription: {
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  welcomeContent: {
+    flex: 1,
+    zIndex: 2,
+  },
+
 
   welcomeLabel: {
     color: Colors.textSecondary,
@@ -907,28 +1103,69 @@ statLabel: {
     fontSize: 12,
   },
 
+  nativeWelcomeLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
 
   adminName: {
     color: Colors.textPrimary,
 
-    fontSize: 27,
+    fontSize: 24,
     fontWeight: '800',
 
-    marginTop: 2,
+    marginTop: 1,
   },
 
+  nativeAdminName: {
+    color: Colors.textPrimary,
+    fontSize: 27,
+    fontWeight: '800',
+    marginTop: 2,
+  },
 
   welcomeDescription: {
     color: Colors.textSecondary,
 
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 16,
 
-    marginTop: 6,
+    marginTop: 4,
 
     maxWidth: 310,
   },
 
+  nativeWelcomeDescription: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  templeArea: {
+    width: 275,
+    height: 118,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+
+  mobileTempleArea: {
+    width: 132,
+    height: 72,
+    marginRight: -8,
+  },
+
+  templeImage: {
+    width: 275,
+    height: 118,
+    opacity: 0.32,
+  },
+
+  mobileTempleImage: {
+    width: 150,
+    height: 72,
+    opacity: 0.32,
+  },
 
   /* CATALOG */
 
@@ -950,6 +1187,12 @@ statLabel: {
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 10,
+  },
+
+  catalogArrow: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 8,
   },
 
 
@@ -1034,6 +1277,40 @@ statLabel: {
     shadowRadius: 7,
   },
 
+  mobileSyncShortcut: {
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+    minHeight: 76,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  mobileSyncIcon: {
+    alignItems: 'center',
+    backgroundColor: Colors.roseMist,
+    borderRadius: 13,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  mobileSyncText: {
+    flex: 1,
+    gap: 3,
+  },
+  mobileSyncTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  mobileSyncSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
 
   cardPressed: {
     opacity: 0.82,

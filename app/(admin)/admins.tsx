@@ -99,7 +99,7 @@ export default function AdminManagementScreen() {
 
       Alert.alert(
         'Search Subscriber',
-        'Enter a subscriber name or email.'
+        'Enter a subscriber name or username.'
       );
 
       return;
@@ -145,7 +145,7 @@ export default function AdminManagementScreen() {
 
     Alert.alert(
       'Promote to Admin',
-      `Give ${subscriber.full_name || subscriber.email} administrator access?`,
+      `Give ${subscriber.full_name || subscriber.username} administrator access?`,
       [
         {
           text: 'Cancel',
@@ -209,7 +209,7 @@ export default function AdminManagementScreen() {
 
     Alert.alert(
       'Remove Admin Access',
-      `${admin.full_name || admin.email} will become a normal subscriber. Continue?`,
+      `${admin.full_name || admin.username} will become a normal subscriber. Continue?`,
       [
         {
           text: 'Cancel',
@@ -353,7 +353,7 @@ export default function AdminManagementScreen() {
                 <Text style={styles.avatarText}>
                   {(
                     admin.full_name?.[0] ??
-                    admin.email?.[0] ??
+                    admin.username?.[0] ??
                     'A'
                   ).toUpperCase()}
                 </Text>
@@ -390,10 +390,10 @@ export default function AdminManagementScreen() {
 
 
                 <Text
-                  style={styles.adminEmail}
+                  style={styles.adminUsername}
                   numberOfLines={1}
                 >
-                  {admin.email}
+                  @{admin.username}
                 </Text>
 
 
@@ -469,7 +469,7 @@ export default function AdminManagementScreen() {
               onChangeText={
                 setSubscriberSearch
               }
-              placeholder="Subscriber name or email..."
+              placeholder="Subscriber name or username..."
               placeholderTextColor={
                 Colors.textSecondary
               }
@@ -524,7 +524,7 @@ export default function AdminManagementScreen() {
                 <Text style={styles.avatarText}>
                   {(
                     subscriber.full_name?.[0] ??
-                    subscriber.email?.[0] ??
+                    subscriber.username?.[0] ??
                     '?'
                   ).toUpperCase()}
                 </Text>
@@ -543,10 +543,10 @@ export default function AdminManagementScreen() {
                 </Text>
 
                 <Text
-                  style={styles.subscriberEmail}
+                  style={styles.subscriberUsername}
                   numberOfLines={1}
                 >
-                  {subscriber.email}
+                  @{subscriber.username}
                 </Text>
 
               </View>
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  adminEmail: {
+  adminUsername: {
     color: Colors.textSecondary,
     fontSize: 9,
     marginTop: 2,
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  subscriberEmail: {
+  subscriberUsername: {
     color: Colors.textSecondary,
     fontSize: 8,
     marginTop: 2,
