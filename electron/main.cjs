@@ -1,6 +1,7 @@
 /* global __dirname */
 
 const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { Buffer } = require('node:buffer');
 const crypto = require('node:crypto');
 const http = require('node:http');
@@ -22,6 +23,8 @@ let lanTransferStartingToken;
 let lanDeviceInfo = null;
 let activeLanTransferPort = 45831;
 let activeR58Port = 45858;
+let updateCheckTimer;
+let updatePromptOpen = false;
 const activeClientSockets = new Set();
 const r58Discovery = createR58Discovery({
   Bonjour: require('bonjour-service'),
@@ -149,6 +152,83 @@ ipcMain.handle('library:app-info', () => ({
   version: app.getVersion(),
   packaged: app.isPackaged,
 }));
+
+async function checkForDesktopUpdates() {
+  if (!app.isPackaged || updatePromptOpen) {
+    return null;
+  }
+  try {
+    return await autoUpdater.checkForUpdates();
+  } catch (error) {
+    console.warn('Unable to check for Ashram Library updates:', error);
+    return null;
+  }
+}
+
+function configureDesktopUpdates() {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('error', (error) => {
+    updatePromptOpen = false;
+    console.warn('Ashram Library update failed:', error);
+  });
+  autoUpdater.on('update-available', async (info) => {
+    if (updatePromptOpen) {
+      return;
+    }
+    updatePromptOpen = true;
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Ashram Library update available',
+      message: `Version ${info.version} is available.`,
+      detail: 'Download the update now. The app will ask before restarting to install it.',
+      buttons: ['Download update', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (result.response !== 0) {
+      updatePromptOpen = false;
+      return;
+    }
+    try {
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      updatePromptOpen = false;
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Ashram Library update failed',
+        message: 'The update could not be downloaded.',
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+  autoUpdater.on('update-downloaded', async (info) => {
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Ashram Library update ready',
+      message: `Version ${info.version} is ready to install.`,
+      detail: 'Restart Ashram Library now to finish the update.',
+      buttons: ['Restart and install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    updatePromptOpen = false;
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  });
+  ipcMain.handle('library:check-for-updates', () => checkForDesktopUpdates());
+  updateCheckTimer = setInterval(() => {
+    void checkForDesktopUpdates();
+  }, 6 * 60 * 60 * 1000);
+  setTimeout(() => {
+    void checkForDesktopUpdates();
+  }, 10_000);
+}
 
 ipcMain.handle('library:choose-file', async (_event, options = {}) => {
   const result = await dialog.showOpenDialog({
@@ -861,6 +941,7 @@ app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) {
     return;
   }
+  configureDesktopUpdates();
   await createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -873,6 +954,10 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = undefined;
+  }
   rendererServer?.close();
   lanTransferServer?.close();
   r58LanServer?.close();

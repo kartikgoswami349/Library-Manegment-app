@@ -9,6 +9,7 @@ declare global {
         version: string;
         packaged: boolean;
       }>;
+      checkForUpdates: () => Promise<unknown>;
       chooseFile: (options?: {
         filters?: { name: string; extensions: string[] }[];
       }) => Promise<string | null>;

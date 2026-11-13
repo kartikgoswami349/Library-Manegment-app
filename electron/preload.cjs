@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('libraryDesktop', {
   isElectron: true,
   getAppInfo: () => ipcRenderer.invoke('library:app-info'),
+  checkForUpdates: () => ipcRenderer.invoke('library:check-for-updates'),
   chooseFile: (options) => ipcRenderer.invoke('library:choose-file', options),
   saveFile: (options) => ipcRenderer.invoke('library:save-file', options),
   readFile: (filePath) => ipcRenderer.invoke('library:read-file', filePath),

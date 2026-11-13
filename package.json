@@ -29,6 +29,7 @@
     "@react-navigation/native": "^7.1.8",
     "bonjour-service": "^1.4.4",
     "buffer": "^5.7.1",
+    "electron-updater": "^6.6.2",
     "expo": "~54.0.36",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
@@ -76,7 +77,11 @@
   "build": {
     "appId": "com.ssda.libraryapp.desktop",
     "productName": "Ashram Library",
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "kartikgoswami349",
+      "repo": "Library-Manegment-app"
+    },
     "extraMetadata": {
       "main": "electron/main.cjs"
     },
